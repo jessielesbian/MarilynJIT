@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.31729.503
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MarilynJIT", "MarilynJIT\MarilynJIT.csproj", "{A2C6A6B7-7716-470F-B6E4-290C56D12A7D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarilynJIT.Tests", "MarilynJIT.Tests\MarilynJIT.Tests.csproj", "{B366F05A-40B9-450F-95C0-B2F80CAD125F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A2C6A6B7-7716-470F-B6E4-290C56D12A7D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2C6A6B7-7716-470F-B6E4-290C56D12A7D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2C6A6B7-7716-470F-B6E4-290C56D12A7D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2C6A6B7-7716-470F-B6E4-290C56D12A7D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B366F05A-40B9-450F-95C0-B2F80CAD125F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B366F05A-40B9-450F-95C0-B2F80CAD125F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B366F05A-40B9-450F-95C0-B2F80CAD125F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B366F05A-40B9-450F-95C0-B2F80CAD125F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {5C4F1DE6-BD83-46A2-AF48-07E9662E5571}
+	EndGlobalSection
+EndGlobal
