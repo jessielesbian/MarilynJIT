@@ -19,7 +19,14 @@ namespace MarilynJIT.Tests
 			Node[] nodes = RandomProgramGenerator.GenerateInitial(parameterExpressions, 256);
 			double unoptimized = Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes), parameterExpressions).Compile()(0);
 			JITCompiler.Optimize(nodes);
+			using (BranchLivenessProfiler branchLivenessProfiler = new BranchLivenessProfiler()){
+				Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes, branchLivenessProfiler), parameterExpressions).Compile()(0));
+				branchLivenessProfiler.Strip(nodes, 1);
+			}
+			JITCompiler.Optimize(nodes);
 			Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes), parameterExpressions).Compile()(0));
+
+
 		}
 	}
 }

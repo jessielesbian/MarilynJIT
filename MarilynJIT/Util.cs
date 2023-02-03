@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -32,5 +33,6 @@ namespace MarilynJIT.Util
 			}
 			throw new NullReferenceException("Free non-existant registered object");
 		}
+		public static readonly MethodInfo get = typeof(RegisteredObjectsManager<T>).GetMethod("Get");
 	}
 }
