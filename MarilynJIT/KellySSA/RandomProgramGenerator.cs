@@ -68,5 +68,18 @@ namespace MarilynJIT.KellySSA
 			}
 			return nodes;
 		}
+		public static void RandomMutate(Node[] nodes, ushort offset){
+			Queue<ushort> randomizeQueue = new Queue<ushort>();
+			randomizeQueue.Enqueue((ushort)RandomNumberGenerator.GetInt32(offset, nodes.Length));
+			while(randomizeQueue.TryDequeue(out ushort height)){
+				Node randomNode = GenerateRandomNode(height);
+				foreach(ushort read in randomNode.GetReads()){
+					if(nodes[read] is null){
+						randomizeQueue.Enqueue(read);
+					}
+				}
+				nodes[height] = randomNode;
+			}
+		}
 	}
 }

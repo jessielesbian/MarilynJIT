@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using MarilynJIT.Util;
 using System.Reflection;
+using System.Collections.Concurrent;
 
 namespace MarilynJIT.KellySSA
 {
@@ -14,8 +15,8 @@ namespace MarilynJIT.KellySSA
 	{
 		private readonly Dictionary<Conditional, ulong> knownNodes = new Dictionary<Conditional, ulong>(ReferenceEqualityComparer.Instance);
 		private readonly Dictionary<ulong, Conditional> knownNodesREV = new Dictionary<ulong, Conditional>();
-		private readonly Dictionary<ulong, bool> notTaken = new Dictionary<ulong, bool>();
-		private readonly Dictionary<ulong, bool> taken = new Dictionary<ulong, bool>();
+		private readonly ConcurrentDictionary<ulong, bool> notTaken = new ConcurrentDictionary<ulong, bool>();
+		private readonly ConcurrentDictionary<ulong, bool> taken = new ConcurrentDictionary<ulong, bool>();
 		private ulong ctr;
 		private readonly ulong me;
 		private readonly Expression getme;
@@ -51,13 +52,13 @@ namespace MarilynJIT.KellySSA
 		}
 		public void Strip(Node[] nodes, ushort offset){
 			Dictionary<Conditional, bool> taken2 = new Dictionary<Conditional, bool>();
-			foreach(ulong v in taken.Keys){
-				taken2.Add(knownNodesREV[v], false);
+			foreach(KeyValuePair<ulong, bool> keyValuePair in taken.ToArray()){
+				taken2.Add(knownNodesREV[keyValuePair.Key], false);
 			}
 			Dictionary<Conditional, bool> notTaken2 = new Dictionary<Conditional, bool>();
-			foreach (ulong v in notTaken.Keys)
+			foreach (KeyValuePair<ulong, bool> keyValuePair in notTaken.ToArray())
 			{
-				notTaken2.Add(knownNodesREV[v], false);
+				notTaken2.Add(knownNodesREV[keyValuePair.Key], false);
 			}
 			JITCompiler.PruneUnreached(nodes, offset, taken2, notTaken2);
 		}
