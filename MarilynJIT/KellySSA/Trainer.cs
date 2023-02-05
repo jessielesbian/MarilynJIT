@@ -194,6 +194,7 @@ namespace MarilynJIT.KellySSA.Trainer
 					}
 				}
 				if(copyfrom is null){
+					skipped = -1;
 					continue;
 				}
 				copyfrom.CopyTo(nodes.AsSpan());
