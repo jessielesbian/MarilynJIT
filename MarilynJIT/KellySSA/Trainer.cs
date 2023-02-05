@@ -188,7 +188,6 @@ namespace MarilynJIT.KellySSA.Trainer
 						return latestMaps[i];
 					}
 					if(rewards > bestScore){
-						Console.WriteLine(rewards);
 						bestScore = rewards;
 						copyfrom = latestMaps[i];
 						skipped = i;
