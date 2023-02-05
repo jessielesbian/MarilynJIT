@@ -48,7 +48,7 @@ namespace MarilynJIT.KellySSA
 			return new Conditional((ushort)RandomNumberGenerator.GetInt32(0, index), (ushort)RandomNumberGenerator.GetInt32(0, index), (ushort)RandomNumberGenerator.GetInt32(0, index));
 		}
 		private static readonly Func<ushort, Node>[] generators = new Func<ushort, Node>[] {
-			GenerateRandomConstant, GenerateRandomAddition, GenerateRandomSubtraction, GenerateRandomMultiplication, GenerateRandomDivision, GenerateRandomModulo, GenerateRandomExponent, GenerateRandomLog, GenerateRandomConditional
+			GenerateRandomConstant, GenerateRandomAddition, GenerateRandomSubtraction, GenerateRandomMultiplication, GenerateRandomConditional, GenerateRandomLog, GenerateRandomExponent, GenerateRandomModulo, GenerateRandomDivision
 		};
 		private static readonly int availableNodeTypes = generators.Length;
 		public static Node GenerateRandomNode(ushort height){
@@ -70,11 +70,60 @@ namespace MarilynJIT.KellySSA
 		}
 		public static void RandomMutate(Node[] nodes, ushort offset){
 			Queue<ushort> randomizeQueue = new Queue<ushort>();
-			randomizeQueue.Enqueue((ushort)RandomNumberGenerator.GetInt32(offset, nodes.Length));
-			while(randomizeQueue.TryDequeue(out ushort height)){
+
+			ushort target;
+			do
+			{
+				target = (ushort)RandomNumberGenerator.GetInt32(offset, nodes.Length);
+			} while (nodes[target] is null);
+			randomizeQueue.Enqueue(target);
+			RandomizeImpl(nodes, randomizeQueue);
+		}
+		public static void StripStaticInvalidValues(Node[] nodes){
+			int len = nodes.Length;
+			Queue<ushort> randomizeQueue = new Queue<ushort>();
+			while (true){
+				JITCompiler.Optimize(nodes);
+				bool added = false;
+				for(ushort i = 1; i < len; ++i){
+					Node node = nodes[i];
+					if (node is null){
+						continue;
+					}
+					if(node.TryEvaluate(nodes.AsSpan(0, i), out double result)){
+						if(double.IsInfinity(result) | double.IsNaN(result)){
+							randomizeQueue.Enqueue(i);
+							added = true;
+							continue;
+						}
+					}
+					if (node is DivideOrModuloOperator divideOrModuloOperator)
+					{
+						if (divideOrModuloOperator.IsStaticInvalidOperator(nodes.AsSpan(0, i)))
+						{
+							randomizeQueue.Enqueue(i);
+							added = true;
+						}
+					}
+				}
+				if(added){
+					RandomizeImpl(nodes, randomizeQueue);
+				} else{
+					return;
+				}
+
+			}
+		}
+
+		public static void RandomizeImpl(Node[] nodes, Queue<ushort> randomizeQueue)
+		{
+			while (randomizeQueue.TryDequeue(out ushort height))
+			{
 				Node randomNode = GenerateRandomNode(height);
-				foreach(ushort read in randomNode.GetReads()){
-					if(nodes[read] is null){
+				foreach (ushort read in randomNode.GetReads())
+				{
+					if (nodes[read] is null)
+					{
 						randomizeQueue.Enqueue(read);
 					}
 				}

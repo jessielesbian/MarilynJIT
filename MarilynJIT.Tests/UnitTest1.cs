@@ -31,7 +31,14 @@ namespace MarilynJIT.Tests
 		{
 			public double GetScore(double[] inputs, double output)
 			{
-				return 0 - Math.Abs((inputs[0] + inputs[1]) - output);
+				if(double.IsNaN(output) | double.IsInfinity(output)){
+					return double.NegativeInfinity;
+				}
+				double temp = Math.Abs((inputs[0] + inputs[1]) - output);
+				if(temp == 0){
+					return double.PositiveInfinity;
+				}
+				return 0 - temp;
 			}
 		}
 		[Test]
@@ -41,7 +48,7 @@ namespace MarilynJIT.Tests
 			double unoptimized = Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes), parameterExpressions).Compile()(0);
 			JITCompiler.Optimize(nodes);
 			using (BranchLivenessProfiler branchLivenessProfiler = new BranchLivenessProfiler()){
-				Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes, branchLivenessProfiler), parameterExpressions).Compile()(0));
+				Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes, false, branchLivenessProfiler), parameterExpressions).Compile()(0));
 				branchLivenessProfiler.Strip(nodes, 1);
 			}
 			JITCompiler.Optimize(nodes);
@@ -50,7 +57,7 @@ namespace MarilynJIT.Tests
 
 		[Test]
 		public async Task KellySSATraining(){
-			await Trainer.Train(256, 4096, 256, 65535, new AdditionTrainingRewardFunction(), new AdditionTrainingDataSource(), 2, 2, 17);
+			await Trainer.Train(16, 256, 65536, 16, new AdditionTrainingRewardFunction(), new AdditionTrainingDataSource(), 2, 8, 17);
 		}
 	}
 }

@@ -235,7 +235,39 @@ namespace MarilynJIT.KellySSA.Nodes
 			return this;
 		}
 	}
-	public sealed class DivideOperator : BinaryOperator
+	public sealed class DynamicInvalidOperation : Exception{
+		public readonly ushort offset;
+
+		public DynamicInvalidOperation(ushort offset)
+		{
+			this.offset = offset;
+		}
+	}
+	public interface ICheckedOperator{
+		public Expression CompileWithChecking(ReadOnlySpan<Expression> prevNodes, ushort index);
+		public bool IsStaticInvalidOperator(ReadOnlySpan<Node> prevNodes);
+	}
+	public abstract class DivideOrModuloOperator : BinaryOperator, ICheckedOperator
+	{
+		private static readonly ConstructorInfo dynamicZeroDivisionConstructor = typeof(DynamicInvalidOperation).GetConstructor(new Type[] {typeof(ushort)});
+		protected DivideOrModuloOperator(ushort first, ushort second) : base(first, second)
+		{
+		}
+
+		private static readonly Expression zero = Expression.Constant(0.0, typeof(double));
+
+		public Expression CompileWithChecking(ReadOnlySpan<Expression> prevNodes, ushort index){
+			return Expression.Block(Expression.IfThen(Expression.Equal(prevNodes[second], zero), Expression.Throw(Expression.New(dynamicZeroDivisionConstructor, Expression.Constant(index, typeof(ushort))))), Compile(prevNodes));
+		}
+		public bool IsStaticInvalidOperator(ReadOnlySpan<Node> prevNodes){
+			if (prevNodes[second].TryEvaluate(prevNodes, out double result))
+			{
+				return result == 0;
+			}
+			return false;
+		}
+	}
+	public sealed class DivideOperator : DivideOrModuloOperator
 	{
 		public DivideOperator(ushort first, ushort second) : base(first, second)
 		{
@@ -287,7 +319,7 @@ namespace MarilynJIT.KellySSA.Nodes
 			return this;
 		}
 	}
-	public sealed class ModuloOperator : BinaryOperator{
+	public sealed class ModuloOperator : DivideOrModuloOperator{
 		public ModuloOperator(ushort first, ushort second) : base(first, second)
 		{
 		}
@@ -302,7 +334,29 @@ namespace MarilynJIT.KellySSA.Nodes
 			return x % y;
 		}
 	}
-	public sealed class ExponentOperator : BinaryOperator
+	public abstract class LogOrExponentOperator : BinaryOperator, ICheckedOperator
+	{
+		private static readonly ConstructorInfo dynamicZeroDivisionConstructor = typeof(DynamicInvalidOperation).GetConstructor(new Type[] { typeof(ushort) });
+		protected LogOrExponentOperator(ushort first, ushort second) : base(first, second)
+		{
+		}
+
+		private static readonly Expression zero = Expression.Constant(0.0, typeof(double));
+
+		public Expression CompileWithChecking(ReadOnlySpan<Expression> prevNodes, ushort index)
+		{
+			return Expression.Block(Expression.IfThen(Expression.LessThanOrEqual(prevNodes[second], zero), Expression.Throw(Expression.New(dynamicZeroDivisionConstructor, Expression.Constant(index, typeof(ushort))))), Compile(prevNodes));
+		}
+		public bool IsStaticInvalidOperator(ReadOnlySpan<Node> prevNodes)
+		{
+			if (prevNodes[first].TryEvaluate(prevNodes, out double result))
+			{
+				return result <= 0;
+			}
+			return false;
+		}
+	}
+	public sealed class ExponentOperator : LogOrExponentOperator
 	{
 		public ExponentOperator(ushort first, ushort second) : base(first, second)
 		{
@@ -352,7 +406,7 @@ namespace MarilynJIT.KellySSA.Nodes
 			return this;
 		}
 	}
-	public sealed class LogOperator : BinaryOperator
+	public sealed class LogOperator : LogOrExponentOperator
 	{
 		private static readonly MethodInfo methodInfo = typeof(Math).GetMethod("Log", types: new Type[] {typeof(double), typeof(double)});
 		public LogOperator(ushort first, ushort second) : base(first, second)

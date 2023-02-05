@@ -76,7 +76,7 @@ namespace MarilynJIT.KellySSA
 				goto start;
 			}
 		}
-		public static Expression Compile(Node[] nodes, IProfilingCodeGenerator profilingCodeGenerator = null)
+		public static Expression Compile(Node[] nodes, bool trapDynamicInvalidOperations = false, IProfilingCodeGenerator profilingCodeGenerator = null)
 		{
 			ushort length = (ushort)nodes.Length;
 			Expression[] expressions = new Expression[length];
@@ -99,8 +99,15 @@ namespace MarilynJIT.KellySSA
 				}
 				ReadOnlySpan<Expression> prev = expressions.AsSpan(0, i);
 				Expression compiled;
-				if(node is Conditional conditional){
-					if(profilingCodeGenerator is { }){
+				if(trapDynamicInvalidOperations){
+					if(node is ICheckedOperator checkedOperator){
+						compiled = checkedOperator.CompileWithChecking(prev, i);
+						goto doneCompile;
+					}
+				}
+				if(profilingCodeGenerator is { }){
+					if(node is Conditional conditional)
+					{
 						profilingCodeGenerator.Generate(conditional, out Expression taken, out Expression notTaken);
 						compiled = conditional.CompileProfiling(prev, taken, notTaken);
 						goto doneCompile;

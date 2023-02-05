@@ -15,8 +15,8 @@ namespace MarilynJIT.KellySSA
 	{
 		private readonly Dictionary<Conditional, ulong> knownNodes = new Dictionary<Conditional, ulong>(ReferenceEqualityComparer.Instance);
 		private readonly Dictionary<ulong, Conditional> knownNodesREV = new Dictionary<ulong, Conditional>();
-		private readonly ConcurrentDictionary<ulong, bool> notTaken = new ConcurrentDictionary<ulong, bool>();
-		private readonly ConcurrentDictionary<ulong, bool> taken = new ConcurrentDictionary<ulong, bool>();
+		private readonly Dictionary<ulong, bool> notTaken = new Dictionary<ulong, bool>();
+		private readonly Dictionary<ulong, bool> taken = new Dictionary<ulong, bool>();
 		private ulong ctr;
 		private readonly ulong me;
 		private readonly Expression getme;
