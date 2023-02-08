@@ -18,7 +18,7 @@ namespace MarilynJIT.KellySSA
 			return new ConstantNode(span[0] / (double)RandomNumberGenerator.GetInt32(1, int.MaxValue));
 		}
 		private static Node GenerateRandomAddition(ushort index){
-			return new AddidionOperator((ushort)RandomNumberGenerator.GetInt32(0, index), (ushort)RandomNumberGenerator.GetInt32(0, index));
+			return new AdditionOperator((ushort)RandomNumberGenerator.GetInt32(0, index), (ushort)RandomNumberGenerator.GetInt32(0, index));
 		}
 		private static Node GenerateRandomSubtraction(ushort index)
 		{
@@ -64,7 +64,7 @@ namespace MarilynJIT.KellySSA
 			}
 			Node[] nodes = new Node[complexity];
 			for(ushort i = 0; i < complexity; ++i){
-				nodes[i] = i < pc ? new ArgumentNode(parameterExpressions[i]) : GenerateRandomNode(i);
+				nodes[i] = i < pc ? new ArgumentNode(i) : GenerateRandomNode(i);
 			}
 			return nodes;
 		}
@@ -117,17 +117,20 @@ namespace MarilynJIT.KellySSA
 
 		public static void RandomizeImpl(Node[] nodes, Queue<ushort> randomizeQueue)
 		{
+			Dictionary<ushort, bool> keyValuePairs = new();
 			while (randomizeQueue.TryDequeue(out ushort height))
 			{
-				Node randomNode = GenerateRandomNode(height);
-				foreach (ushort read in randomNode.GetReads())
-				{
-					if (nodes[read] is null)
+				if(keyValuePairs.TryAdd(height, false)){
+					Node randomNode = GenerateRandomNode(height);
+					foreach (ushort read in randomNode.GetReads())
 					{
-						randomizeQueue.Enqueue(read);
+						if (nodes[read] is null)
+						{
+							randomizeQueue.Enqueue(read);
+						}
 					}
+					nodes[height] = randomNode;
 				}
-				nodes[height] = randomNode;
 			}
 		}
 	}

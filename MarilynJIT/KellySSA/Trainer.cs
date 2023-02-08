@@ -1,4 +1,5 @@
 ﻿using MarilynJIT.KellySSA.Nodes;
+using MarilynJIT.KellySSA.Profiler;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -43,7 +44,7 @@ namespace MarilynJIT.KellySSA.Trainer
 				current = 0;
 			}
 		}
-		public static async Task<Node[]> Train(int profilingRunsPerIteration, int heavilyOptimizedRunsPerIteration, ulong iterations, ushort complexity, IRewardFunction rewardFunction, IDataSource dataSource, ushort argumentsCount, ushort threadsCount, int eliminateOutliers){
+		public static async Task<Node[]> Train(int profilingRunsPerIteration, int heavilyOptimizedRunsPerIteration, ulong iterations, ushort complexity, IRewardFunction rewardFunction, IDataSource dataSource, ushort argumentsCount, ushort threadsCount, int eliminateOutliers, ulong edgeCaseHyperoptimizationTreshold){
 
 			ParameterExpression[] parameterExpressions = new ParameterExpression[argumentsCount];
 			Type[] types = new Type[argumentsCount];
@@ -65,6 +66,7 @@ namespace MarilynJIT.KellySSA.Trainer
 			
 			WorkerThread[] workerThreads = new WorkerThread[threadsCount];
 			Node[][] latestMaps = new Node[threadsCount][];
+			ConcurrentBag<Node[]> hyperoptimizedPool = new ConcurrentBag<Node[]>();
 			for (ushort i = 0; i < threadsCount; ++i){
 				workerThreads[i] = new WorkerThread();
 				latestMaps[i] = new Node[complexity];
@@ -78,9 +80,10 @@ namespace MarilynJIT.KellySSA.Trainer
 				nodes.CopyTo(latest.AsSpan());
 				Queue<double> scores = new Queue<double>();
 				Queue<ushort> reRandomizeQueue = new Queue<ushort>();
-				void Execute(int iterations, Expression expression)
+				void Execute(int iterations, Expression expression, Expression deoptimizedExpression)
 				{
 					Delegate method = Expression.Lambda(expression, true, parameterExpressions).Compile(false);
+					Delegate deoptimizedMethod = null;
 					double[] buffer = new double[argumentsCount];
 					object[] buf2 = new object[argumentsCount];
 					for(int z = 0; z < iterations; ++z)
@@ -92,15 +95,26 @@ namespace MarilynJIT.KellySSA.Trainer
 						}
 						object temp;
 
+						Delegate current = method;
+					deoptimized:
 						try
 						{
-							temp = method.DynamicInvoke(buf2);
+							temp = current.DynamicInvoke(buf2);
 						}
 						catch (TargetInvocationException e)
 						{
-							if (e.InnerException is DynamicInvalidOperation dynamicInvalidOperation)
+							Exception inner = e.InnerException;
+							if (inner is DynamicInvalidOperation dynamicInvalidOperation)
 							{
+								reRandomizeQueue.Enqueue(dynamicInvalidOperation.offset);
 								return;
+							}
+							if(inner is OptimizedBailout){
+								if (deoptimizedMethod is null){
+									deoptimizedMethod = Expression.Lambda(deoptimizedExpression, true, parameterExpressions).Compile(false);
+								}
+								current = deoptimizedMethod;
+								goto deoptimized;
 							}
 							throw;
 						}
@@ -115,15 +129,31 @@ namespace MarilynJIT.KellySSA.Trainer
 				RandomProgramGenerator.StripStaticInvalidValues(latest);
 				JITCompiler.Optimize(latest);
 
+				Node[] hyperoptimized = null;
+
 				//Initial compilation and execution with branch liveness profiling and dynamic invalid operation elimination
 				while (true)
 				{
-					using (BranchLivenessProfiler branchLivenessProfiler = new BranchLivenessProfiler())
+					using (BranchCounter branchCounter = new BranchCounter())
 					{
-						Execute(profilingRunsPerIteration, JITCompiler.Compile(latest, true, branchLivenessProfiler));
+						Execute(profilingRunsPerIteration, JITCompiler.Compile(latest, parameterExpressions, true, branchCounter), null);
 
 						//Strip unreached branches
-						branchLivenessProfiler.Strip(latest, argumentsCount);
+						branchCounter.Strip(latest, argumentsCount, 0, false);
+
+						//Generate hyperoptimized code
+						if(edgeCaseHyperoptimizationTreshold == 0){
+							continue;
+						}
+						if (hyperoptimized is null)
+						{
+							if (!hyperoptimizedPool.TryTake(out hyperoptimized))
+							{
+								hyperoptimized = new Node[complexity];
+							}
+						}
+						latest.CopyTo(hyperoptimized.AsSpan());
+						branchCounter.Strip(hyperoptimized, argumentsCount, edgeCaseHyperoptimizationTreshold, true);
 					}
 					if (reRandomizeQueue.Count == 0)
 					{
@@ -138,8 +168,13 @@ namespace MarilynJIT.KellySSA.Trainer
 					}
 				}
 
+				JITCompiler.Optimize(hyperoptimized);
+				Expression hyperoptimizedExpression = JITCompiler.Compile(hyperoptimized, parameterExpressions);
+				hyperoptimizedPool.Add(hyperoptimized);
+
+
 				//Recompilation and execution with heavy optimizations
-				Execute(heavilyOptimizedRunsPerIteration, JITCompiler.Compile(latest));
+				Execute(heavilyOptimizedRunsPerIteration, hyperoptimizedExpression, JITCompiler.Compile(latest, parameterExpressions));
 
 				//Sort
 				List<double> list = new List<double>(totalRunsPerIteration);

@@ -4,9 +4,11 @@ using System;
 using MarilynJIT.KellySSA;
 using MarilynJIT.KellySSA.Nodes;
 using MarilynJIT.KellySSA.Trainer;
+using MarilynJIT.KellySSA.Profiler;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
 
 namespace MarilynJIT.Tests
 {
@@ -45,19 +47,21 @@ namespace MarilynJIT.Tests
 		public void KellySSAVirtualMachine(){
 			ParameterExpression[] parameterExpressions = new ParameterExpression[] { Expression.Parameter(typeof(double)) };
 			Node[] nodes = RandomProgramGenerator.GenerateInitial(parameterExpressions, 256);
-			double unoptimized = Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes), parameterExpressions).Compile()(0);
+			double unoptimized = Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes, parameterExpressions), parameterExpressions).Compile()(0);
 			JITCompiler.Optimize(nodes);
-			using (BranchLivenessProfiler branchLivenessProfiler = new BranchLivenessProfiler()){
-				Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes, false, branchLivenessProfiler), parameterExpressions).Compile()(0));
-				branchLivenessProfiler.Strip(nodes, 1);
+			using (BranchCounter branchCounter = new BranchCounter()){
+				Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes, parameterExpressions, false, branchCounter), parameterExpressions).Compile()(0));
+				branchCounter.Strip(nodes, 1, 0, false);
 			}
 			JITCompiler.Optimize(nodes);
-			Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes), parameterExpressions).Compile()(0));
+			Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes, parameterExpressions), parameterExpressions).Compile()(0));
 		}
 
 		[Test]
 		public async Task KellySSATraining(){
-			await Trainer.Train(16, 256, 65536, 16, new AdditionTrainingRewardFunction(), new AdditionTrainingDataSource(), 2, 8, 17);
+			Node[] nodes = await Trainer.Train(16, 256, ulong.MaxValue, 256, new AdditionTrainingRewardFunction(), new AdditionTrainingDataSource(), 2, 8, 17, 5);
+
+			Serialization.DeserializeJsonNodesArray(JsonConvert.SerializeObject(nodes));
 		}
 	}
 }

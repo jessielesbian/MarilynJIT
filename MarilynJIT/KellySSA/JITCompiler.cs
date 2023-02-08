@@ -8,9 +8,12 @@ using System.Threading.Tasks;
 
 namespace MarilynJIT.KellySSA
 {
+	public sealed class OptimizedBailout : Exception{
+		
+	}
 	public static class JITCompiler
 	{
-		public static void PruneUnreached(Node[] nodes, ushort offset, IReadOnlyDictionary<Conditional, bool> taken, IReadOnlyDictionary<Conditional, bool> notTaken){
+		public static void PruneUnreached(Node[] nodes, ushort offset, IReadOnlyDictionary<Conditional, bool> taken, IReadOnlyDictionary<Conditional, bool> notTaken, bool emitBailout){
 			if(offset < 1){
 				throw new ArgumentOutOfRangeException(nameof(offset));
 			}
@@ -26,7 +29,7 @@ namespace MarilynJIT.KellySSA
 					{
 						continue;
 					}
-					nodes[i] = conditional.If(nodes.AsSpan(0, i), nodeTaken);
+					nodes[i] = conditional.If(nodes.AsSpan(0, i), nodeTaken, emitBailout);
 				}
 			}
 		}
@@ -76,7 +79,7 @@ namespace MarilynJIT.KellySSA
 				goto start;
 			}
 		}
-		public static Expression Compile(Node[] nodes, bool trapDynamicInvalidOperations = false, IProfilingCodeGenerator profilingCodeGenerator = null)
+		public static Expression Compile(Node[] nodes, ReadOnlySpan<ParameterExpression> parameterExpressions, bool trapDynamicInvalidOperations = false, IProfilingCodeGenerator profilingCodeGenerator = null)
 		{
 			ushort length = (ushort)nodes.Length;
 			Expression[] expressions = new Expression[length];
@@ -86,7 +89,7 @@ namespace MarilynJIT.KellySSA
 			if(first is { }){
 				if (first is IDirectCompileNode)
 				{
-					expressions[0] = first.Compile(ReadOnlySpan<Expression>.Empty);
+					expressions[0] = first.Compile(ReadOnlySpan<Expression>.Empty, parameterExpressions);
 				} else{
 					throw new ArgumentException("The first node must be directy compilable");
 				}
@@ -114,7 +117,7 @@ namespace MarilynJIT.KellySSA
 					}
 				}
 
-				compiled = node.Compile(prev);
+				compiled = node.Compile(prev, parameterExpressions);
 				if (node is IDirectCompileNode)
 				{
 					expressions[i] = compiled;
@@ -127,7 +130,11 @@ namespace MarilynJIT.KellySSA
 				variables.Add(variable);
 			}
 			expressions1.Add(expressions[length - 1] ?? throw new Exception("should not reach here"));
-			return Expression.Block(variables, expressions1);
+			Expression optimizedExpression = Expression.Block(variables, expressions1);
+			while(optimizedExpression.CanReduce){
+				optimizedExpression = optimizedExpression.ReduceAndCheck();
+			}
+			return optimizedExpression;
 		}
 	}
 	public interface IProfilingCodeGenerator{
