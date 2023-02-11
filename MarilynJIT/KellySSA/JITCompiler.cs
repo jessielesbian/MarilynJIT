@@ -140,4 +140,7 @@ namespace MarilynJIT.KellySSA
 	public interface IProfilingCodeGenerator{
 		public void Generate(Conditional conditional, out Expression taken, out Expression notTaken);
 	}
+	public interface IColdCodeStripper : IProfilingCodeGenerator{
+		public void Strip(Node[] nodes, ushort offset, ulong minInvocations, bool emitBailout);
+	}
 }

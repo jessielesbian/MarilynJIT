@@ -3,12 +3,15 @@ using System.Linq.Expressions;
 using System;
 using MarilynJIT.KellySSA;
 using MarilynJIT.KellySSA.Nodes;
-using MarilynJIT.KellySSA.Trainer;
+using MarilynJIT.KellySSA;
 using MarilynJIT.KellySSA.Profiler;
 using System.Security.Cryptography;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
+using MarilynJIT.TuringML.Nodes;
+using MarilynJIT.TuringML.Transform;
+using MarilynJIT.TuringML;
 
 namespace MarilynJIT.Tests
 {
@@ -46,22 +49,42 @@ namespace MarilynJIT.Tests
 		[Test]
 		public void KellySSAVirtualMachine(){
 			ParameterExpression[] parameterExpressions = new ParameterExpression[] { Expression.Parameter(typeof(double)) };
-			Node[] nodes = RandomProgramGenerator.GenerateInitial(parameterExpressions, 256);
-			double unoptimized = Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes, parameterExpressions), parameterExpressions).Compile()(0);
-			JITCompiler.Optimize(nodes);
+			Node[] nodes = RandomProgramGenerator.GenerateInitial(1, 256);
+			double unoptimized = Expression.Lambda<Func<double, double>>(KellySSA.JITCompiler.Compile(nodes, parameterExpressions), parameterExpressions).Compile()(0);
+			KellySSA.JITCompiler.Optimize(nodes);
 			using (BranchCounter branchCounter = new BranchCounter()){
-				Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes, parameterExpressions, false, branchCounter), parameterExpressions).Compile()(0));
+				Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(KellySSA.JITCompiler.Compile(nodes, parameterExpressions, false, branchCounter), parameterExpressions).Compile()(0));
 				branchCounter.Strip(nodes, 1, 0, false);
 			}
-			JITCompiler.Optimize(nodes);
-			Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(JITCompiler.Compile(nodes, parameterExpressions), parameterExpressions).Compile()(0));
+			KellySSA.JITCompiler.Optimize(nodes);
+			Assert.AreEqual(unoptimized, Expression.Lambda<Func<double, double>>(KellySSA.JITCompiler.Compile(nodes, parameterExpressions), parameterExpressions).Compile()(0));
 		}
 
 		[Test]
 		public async Task KellySSATraining(){
-			Node[] nodes = await Trainer.Train(16, 256, ulong.MaxValue, 256, new AdditionTrainingRewardFunction(), new AdditionTrainingDataSource(), 2, 8, 17, 5);
+			Node[] nodes = await KellySSA.Trainer.Train(16, 256, ulong.MaxValue, 256, new AdditionTrainingRewardFunction(), new AdditionTrainingDataSource(), 2, 8, 17, 5);
 
-			Serialization.DeserializeJsonNodesArray(JsonConvert.SerializeObject(nodes));
+			KellySSA.Nodes.Serialization.DeserializeJsonNodesArray(JsonConvert.SerializeObject(nodes));
+		}
+
+		[Test]
+		public void TuringMLJITCompiler(){
+			RandomTransformer randomTransformer = new RandomTransformer(16, 256);
+			TuringNode turingNode = new Block();
+			ParameterExpression[] variables = new ParameterExpression[16];
+			for (byte i = 0; i < 16; ++i)
+			{
+				variables[i] = Expression.Parameter(typeof(double));
+			}
+			for (byte i = 0; i < 255; ++i){
+				turingNode = randomTransformer.Visit(turingNode);
+			}
+			turingNode.Compile(variables, Expression.Block(), null);	
+		}
+
+		[Test]
+		public async Task TuringMLTraining(){
+			await TuringML.Trainer.Train(new AdditionTrainingDataSource(), new AdditionTrainingRewardFunction(), 16, 2, 2, 256, 2, 256, 256, 256, 4, 16, 16);
 		}
 	}
 }

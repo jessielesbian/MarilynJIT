@@ -6,6 +6,8 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Xml.Serialization;
+using MarilynJIT.TuringML;
+using MarilynJIT.TuringML.Transform.KellySSA;
 
 namespace MarilynJIT.KellySSA.Nodes
 {
@@ -52,6 +54,9 @@ namespace MarilynJIT.KellySSA.Nodes
 					return new Bailout(obj.GetValue("mybranch").ToObject<ushort>(), obj.GetValue("z").ToObject<ushort>(), obj.GetValue("taken").ToObject<bool>());
 				case "ArgumentNode":
 					return new ArgumentNode(obj.GetValue("parameterId").ToObject<ushort>());
+				case "CopyResults":
+					//Special friend function
+					return Transformer.CreateCopyResults(obj.GetValue("size").ToObject<ushort>(), obj.GetValue("start").ToObject<ushort>());
 				default:
 					throw new Exception("Unrecognized node type: " + nodetype);
 			}

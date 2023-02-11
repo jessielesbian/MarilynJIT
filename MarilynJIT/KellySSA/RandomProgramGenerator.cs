@@ -54,8 +54,7 @@ namespace MarilynJIT.KellySSA
 		public static Node GenerateRandomNode(ushort height){
 			return generators[RandomNumberGenerator.GetInt32(0, availableNodeTypes)](height);
 		}
-		public static Node[] GenerateInitial(ParameterExpression[] parameterExpressions, ushort complexity){
-			int pc = parameterExpressions.Length;
+		public static Node[] GenerateInitial(ushort pc, ushort complexity){
 			if(pc >= complexity){
 				throw new ArgumentException("Complexity must exceed the number of parameter expressions");
 			}
@@ -71,12 +70,12 @@ namespace MarilynJIT.KellySSA
 		public static void RandomMutate(Node[] nodes, ushort offset){
 			Queue<ushort> randomizeQueue = new Queue<ushort>();
 
-			ushort target;
+			int target;
 			do
 			{
-				target = (ushort)RandomNumberGenerator.GetInt32(offset, nodes.Length);
+				target = RandomNumberGenerator.GetInt32(offset, nodes.Length);
 			} while (nodes[target] is null);
-			randomizeQueue.Enqueue(target);
+			randomizeQueue.Enqueue((ushort)target);
 			RandomizeImpl(nodes, randomizeQueue);
 		}
 		public static void StripStaticInvalidValues(Node[] nodes){

@@ -10,7 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace MarilynJIT.KellySSA.Trainer
+namespace MarilynJIT.KellySSA
 {
 	public interface IRewardFunction{
 		public double GetScore(double[] inputs, double output);
@@ -54,7 +54,7 @@ namespace MarilynJIT.KellySSA.Trainer
 				parameterExpressions[i] = Expression.Parameter(typeof(double));
 			}
 
-			Node[] nodes = RandomProgramGenerator.GenerateInitial(parameterExpressions, complexity);
+			Node[] nodes = RandomProgramGenerator.GenerateInitial(argumentsCount, complexity);
 			JITCompiler.Optimize(nodes);
 
 			int totalRunsPerIteration = profilingRunsPerIteration + heavilyOptimizedRunsPerIteration;
