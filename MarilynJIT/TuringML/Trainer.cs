@@ -12,6 +12,9 @@ using MarilynJIT.KellySSA;
 
 namespace MarilynJIT.TuringML
 {
+	public interface IRewardFunction{
+		public double GetScore(double[] inputs, double[] output);
+	}
 	public static class Trainer
 	{
 		public static async Task<TuringNode> Train(IDataSource dataSource, IRewardFunction rewardFunction, ushort variablesCount, ushort argumentsCount, int extendedArgumentsCount, ushort ssacomplexity, ulong iterations, int profilingRunsPerIteration, int heavilyOptimizedRunsPerIteration, ulong loopLimit, ulong coldBranchHyperoptimizationTreshold, ushort threads, int removeOutliers){
@@ -27,8 +30,10 @@ namespace MarilynJIT.TuringML
 			int endOfResults = totalRunsPerIteration - removeOutliers;
 
 			double[][] buffers = new double[threads][];
-			for(ushort i = 0; i < threads; ++i){
+			double[][] outputs = new double[threads][];
+			for (ushort i = 0; i < threads; ++i){
 				buffers[i] = new double[extendedArgumentsCount];
+				outputs[i] = new double[variablesCount];
 				workerThreads[i] = new WorkerThread();
 				scores[i] = double.NegativeInfinity;
 			}
@@ -38,22 +43,36 @@ namespace MarilynJIT.TuringML
 				List<double> list = new List<double>(totalRunsPerIteration);
 
 				//Initial compilation with light optimizations + profiling
-				Func<double[], double> func = JITCompiler.PostfixWithRewardFunction(JITCompiler.CompileProfiling(mine, variablesCount, argumentsCount, loopLimit, out LightweightBranchCounter lightweightBranchCounter), rewardFunction);
+				Action<double[], double[]> func = JITCompiler.CompileProfiling(mine, variablesCount, argumentsCount, loopLimit, out LightweightBranchCounter lightweightBranchCounter);
 				double[] buffer = buffers[threadid];
+				double[] output = outputs[threadid];
+
 				for (int i = 0; i < profilingRunsPerIteration; ++i){
 					dataSource.GetData(buffer);
-					list.Add(func(buffer));
+					func(buffer, output);
+					list.Add(rewardFunction.GetScore(buffer, output));
 				}
 
 				new UnreachedBranchesStripper(0, false, variablesCount, lightweightBranchCounter).Visit(mine);
 
+				if(coldBranchHyperoptimizationTreshold > 0){
+					new UnreachedBranchesStripper(coldBranchHyperoptimizationTreshold, true, variablesCount, lightweightBranchCounter).Visit(mine);
+				}
+
 				//Recompilation with heavy optimizations + no profiling
-				func = JITCompiler.PostfixWithRewardFunction(JITCompiler.Compile(coldBranchHyperoptimizationTreshold == 0 ? mine : new UnreachedBranchesStripper(coldBranchHyperoptimizationTreshold, true, variablesCount, lightweightBranchCounter).Visit(mine.DeepClone()), variablesCount, argumentsCount, loopLimit), rewardFunction);
+				func = JITCompiler.Compile(mine, variablesCount, argumentsCount, loopLimit);
+
+				//Strip optimized version
+				if (coldBranchHyperoptimizationTreshold > 0)
+				{
+					KellySSAOptimizedVersionStripper.instance.Visit(mine);
+				}
 
 				for (int i = 0; i < heavilyOptimizedRunsPerIteration; ++i)
 				{
 					dataSource.GetData(buffer);
-					list.Add(func(buffer));
+					func(buffer, output);
+					list.Add(rewardFunction.GetScore(buffer, output));
 				}
 
 				double total = 0;

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq.Expressions;
+using System.Reflection;
 using System.Security.Cryptography;
 using MarilynJIT.KellySSA;
 using MarilynJIT.KellySSA.Nodes;
@@ -13,7 +14,7 @@ namespace MarilynJIT.TuringML.Nodes
 
 	[Serializable]
 	public abstract class TuringNode{
-		public abstract Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, IProfilingCodeGenerator? profilingCodeGenerator);
+		public abstract Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator? profilingCodeGenerator);
 		public virtual void VisitChildren(IVisitor visitor){
 			
 		}
@@ -23,7 +24,7 @@ namespace MarilynJIT.TuringML.Nodes
 	public sealed class NoOperation : TuringNode{
 		private static readonly Expression expression = Expression.Block();
 
-		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, IProfilingCodeGenerator profilingCodeGenerator)
+		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
 		{
 			return expression;
 		}
@@ -38,10 +39,10 @@ namespace MarilynJIT.TuringML.Nodes
 		public ushort condition;
 		private static readonly Expression zero = Expression.Constant(0.0, typeof(double));
 
-		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, IProfilingCodeGenerator profilingCodeGenerator)
+		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
 		{
 			LabelTarget breakTarget = Expression.Label();
-			return Expression.Loop(Expression.IfThenElse(Expression.GreaterThan(variables[condition], zero), Expression.Block(safepoint, underlying.Compile(variables, safepoint, profilingCodeGenerator)), Expression.Break(breakTarget)), breakTarget);
+			return Expression.Loop(Expression.IfThenElse(Expression.GreaterThan(variables[condition], zero), Expression.Block(safepoint, underlying.Compile(variables, safepoint, memoryArray, profilingCodeGenerator)), Expression.Break(breakTarget)), breakTarget);
 		}
 
 		public override TuringNode DeepClone()
@@ -57,14 +58,14 @@ namespace MarilynJIT.TuringML.Nodes
 	public sealed class Block : TuringNode{
 		public readonly List<TuringNode> turingNodes = new List<TuringNode>();
 
-		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, IProfilingCodeGenerator profilingCodeGenerator)
+		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
 		{
 			List<Expression> compiled = new List<Expression>(turingNodes.Count);
 			foreach(TuringNode turingNode in turingNodes){
 				if(turingNode is NoOperation){
 					continue;
 				}
-				compiled.Add(turingNode.Compile(variables, safepoint, profilingCodeGenerator));
+				compiled.Add(turingNode.Compile(variables, safepoint, memoryArray, profilingCodeGenerator));
 			}
 			return Expression.Block(compiled);
 		}
@@ -99,13 +100,53 @@ namespace MarilynJIT.TuringML.Nodes
 			}
 		}
 	}
+
+	public sealed class MemoryRead : TuringNode{
+		public static double Access(double[] memory, double address)
+		{
+			return address < 0 | address >= 65536 | double.IsNaN(address) ? double.NaN : memory[(ushort)Math.Floor(address)];
+		}
+		private static readonly MethodInfo access = typeof(MemoryRead).GetMethod("Access");
+		public ushort target;
+
+		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
+		{
+			ParameterExpression variable = variables[target];
+			return Expression.Assign(variable, Expression.Call(access, memoryArray, variable));
+		}
+
+		public override TuringNode DeepClone()
+		{
+			return new MemoryRead { target = target };
+		}
+	}
+	public sealed class MemoryWrite : TuringNode{
+		public ushort address;
+		public ushort value;
+		public static void Write(double[] memory, double address, double value){
+			if(address < 0 | address >= 65536 | double.IsNaN(address)){
+				return;
+			}
+			memory[(ushort)Math.Floor(address)] = value;
+		}
+		private static readonly MethodInfo write = typeof(MemoryWrite).GetMethod("Write");
+		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
+		{
+			return Expression.Call(write, memoryArray, variables[address], variables[value]);
+		}
+
+		public override TuringNode DeepClone()
+		{
+			return new MemoryWrite { address = address, value = value };
+		}
+	}
 	
 	public sealed class KellySSABasicBlock : TuringNode
 	{
 		public Node[] nodes;
 		public Node[] optimized;
 
-		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, IProfilingCodeGenerator profilingCodeGenerator)
+		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
 		{
 			Expression compiled = KellySSA.JITCompiler.Compile(nodes, variables);
 			if(optimized is null){

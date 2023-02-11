@@ -13,7 +13,7 @@ namespace MarilynJIT.TuringML.Nodes
 		{
 			public TuringNode[] turingNodes;
 
-			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, IProfilingCodeGenerator profilingCodeGenerator)
+			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
 			{
 				throw new NotImplementedException();
 			}
@@ -27,7 +27,7 @@ namespace MarilynJIT.TuringML.Nodes
 		{
 			public string json;
 
-			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, IProfilingCodeGenerator profilingCodeGenerator)
+			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
 			{
 				throw new NotImplementedException();
 			}

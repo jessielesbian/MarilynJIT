@@ -32,7 +32,7 @@ namespace MarilynJIT.Tests
 				buffer[1] = span[1] / 1024.0;
 			}
 		}
-		private sealed class AdditionTrainingRewardFunction : IRewardFunction
+		private sealed class AdditionTrainingRewardFunction : KellySSA.IRewardFunction
 		{
 			public double GetScore(double[] inputs, double output)
 			{
@@ -41,6 +41,23 @@ namespace MarilynJIT.Tests
 				}
 				double temp = Math.Abs((inputs[0] + inputs[1]) - output);
 				if(temp == 0){
+					return double.PositiveInfinity;
+				}
+				return 0 - temp;
+			}
+		}
+		private sealed class AdditionTrainingTuringMLRewardFunction : TuringML.IRewardFunction
+		{
+			public double GetScore(double[] inputs, double[] output1)
+			{
+				double output = output1[output1.Length - 1];
+				if (double.IsNaN(output) | double.IsInfinity(output))
+				{
+					return double.NegativeInfinity;
+				}
+				double temp = Math.Abs(inputs[0] + inputs[1] - output);
+				if (temp == 0)
+				{
 					return double.PositiveInfinity;
 				}
 				return 0 - temp;
@@ -62,7 +79,7 @@ namespace MarilynJIT.Tests
 
 		[Test]
 		public async Task KellySSATraining(){
-			Node[] nodes = await KellySSA.Trainer.Train(16, 256, ulong.MaxValue, 256, new AdditionTrainingRewardFunction(), new AdditionTrainingDataSource(), 2, 8, 17, 5);
+			Node[] nodes = await KellySSA.Trainer.Train(16, 256, ulong.MaxValue, 256, new AdditionTrainingRewardFunction(), new AdditionTrainingDataSource(), 256, 8, 17, 5);
 
 			KellySSA.Nodes.Serialization.DeserializeJsonNodesArray(JsonConvert.SerializeObject(nodes));
 		}
@@ -79,12 +96,12 @@ namespace MarilynJIT.Tests
 			for (byte i = 0; i < 255; ++i){
 				turingNode = randomTransformer.Visit(turingNode);
 			}
-			turingNode.Compile(variables, Expression.Block(), null);	
+			turingNode.Compile(variables, Expression.Block(), Expression.Variable(typeof(double[])), null);	
 		}
 
 		[Test]
 		public async Task TuringMLTraining(){
-			await TuringML.Trainer.Train(new AdditionTrainingDataSource(), new AdditionTrainingRewardFunction(), 16, 2, 2, 256, 2, 256, 256, 256, 4, 16, 16);
+			await TuringML.Trainer.Train(new AdditionTrainingDataSource(), new AdditionTrainingTuringMLRewardFunction(), 16, 2, 2, 256, 2, 256, 256, 256, 4, 16, 16);
 		}
 	}
 }
