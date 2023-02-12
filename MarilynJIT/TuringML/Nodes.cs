@@ -102,17 +102,14 @@ namespace MarilynJIT.TuringML.Nodes
 	}
 	[Serializable]
 	public sealed class MemoryRead : TuringNode{
-		public static double Access(double[] memory, double address)
-		{
-			return address < 0 | address >= 65536 | double.IsNaN(address) ? double.NaN : memory[(ushort)Math.Floor(address)];
-		}
-		private static readonly MethodInfo access = typeof(MemoryRead).GetMethod("Access");
+		
+		private static readonly MethodInfo read = typeof(VirtualMemoryManager).GetMethod("Read");
 		public ushort target;
 
 		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
 		{
 			ParameterExpression variable = variables[target];
-			return Expression.Assign(variable, Expression.Call(access, memoryArray, variable));
+			return Expression.Assign(variable, Expression.Call(memoryArray, read, variable));
 		}
 
 		public override TuringNode DeepClone()
@@ -124,16 +121,11 @@ namespace MarilynJIT.TuringML.Nodes
 	public sealed class MemoryWrite : TuringNode{
 		public ushort address;
 		public ushort value;
-		public static void Write(double[] memory, double address, double value){
-			if(address < 0 | address >= 65536 | double.IsNaN(address)){
-				return;
-			}
-			memory[(ushort)Math.Floor(address)] = value;
-		}
-		private static readonly MethodInfo write = typeof(MemoryWrite).GetMethod("Write");
+		
+		private static readonly MethodInfo write = typeof(VirtualMemoryManager).GetMethod("Write");
 		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
 		{
-			return Expression.Call(write, memoryArray, variables[address], variables[value]);
+			return Expression.Call(memoryArray, write, variables[address], variables[value]);
 		}
 
 		public override TuringNode DeepClone()

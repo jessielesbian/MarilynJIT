@@ -12,7 +12,7 @@ using MarilynJIT.TuringML.Transform.KellySSA;
 namespace MarilynJIT.TuringML
 {
 	public interface ITestingEnvironment{
-		public double GetScore(Action<double[], double[]> action);
+		public double GetScore(Action<double[], double[], int> action);
 	}
 	public static class Trainer
 	{
@@ -42,7 +42,7 @@ namespace MarilynJIT.TuringML
 				List<double> list = new List<double>(totalRunsPerIteration);
 
 				//Initial compilation with light optimizations + profiling
-				Action<double[], double[]> func = JITCompiler.CompileProfiling(mine, variablesCount, argumentsCount, loopLimit, out LightweightBranchCounter lightweightBranchCounter);
+				Action<double[], double[], int> func = JITCompiler.CompileProfiling(mine, variablesCount, argumentsCount, loopLimit, out LightweightBranchCounter lightweightBranchCounter);
 
 				for (int i = 0; i < profilingRunsPerIteration; ++i){
 					list.Add(testingEnvironment.GetScore(func));

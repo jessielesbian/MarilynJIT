@@ -49,14 +49,14 @@ namespace MarilynJIT.Tests
 		}
 		private sealed class AdditionTrainingTestingEnvironment : ITestingEnvironment
 		{
-			public double GetScore(Action<double[], double[]> action)
+			public double GetScore(Action<double[], double[], int> action)
 			{
 				double[] output = new double[256];
 				Span<long> span = stackalloc long[2];
 				RandomNumberGenerator.Fill(MemoryMarshal.AsBytes(span));
 				double x = span[0] / 65536.0;
 				double y = span[1] / 65536.0;
-				action(new double[] {x, y}, output);
+				action(new double[] {x, y}, output, 4096);
 				double result = output[255];
 				if (double.IsNaN(result) | double.IsInfinity(result))
 				{
