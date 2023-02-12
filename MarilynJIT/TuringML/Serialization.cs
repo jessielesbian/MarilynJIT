@@ -9,6 +9,7 @@ namespace MarilynJIT.TuringML.Nodes
 {
 	public static class Serialization
 	{
+		[Serializable]
 		private sealed class SerializableBlock : TuringNode
 		{
 			public TuringNode[] turingNodes;
@@ -23,6 +24,7 @@ namespace MarilynJIT.TuringML.Nodes
 				throw new NotImplementedException();
 			}
 		}
+		[Serializable]
 		private sealed class SerializableKellySSABasicBlock : TuringNode
 		{
 			public string json;

@@ -12,6 +12,7 @@ using Newtonsoft.Json;
 using MarilynJIT.TuringML.Nodes;
 using MarilynJIT.TuringML.Transform;
 using MarilynJIT.TuringML;
+using System.IO;
 
 namespace MarilynJIT.Tests
 {
@@ -96,7 +97,10 @@ namespace MarilynJIT.Tests
 			for (byte i = 0; i < 255; ++i){
 				turingNode = randomTransformer.Visit(turingNode);
 			}
-			turingNode.Compile(variables, Expression.Block(), Expression.Variable(typeof(double[])), null);	
+			turingNode.Compile(variables, Expression.Block(), Expression.Variable(typeof(double[])), null);
+			using MemoryStream memoryStream = new MemoryStream(); TuringML.Nodes.Serialization.Serialize(turingNode, memoryStream);
+			memoryStream.Seek(0, SeekOrigin.Begin);
+			TuringML.Nodes.Serialization.Deserialize(memoryStream);
 		}
 
 		[Test]

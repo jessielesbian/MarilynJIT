@@ -11,7 +11,6 @@ namespace MarilynJIT.TuringML.Nodes
 	public interface IVisitor{
 		public TuringNode Visit(TuringNode turingNode);
 	}
-
 	[Serializable]
 	public abstract class TuringNode{
 		public abstract Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator? profilingCodeGenerator);
@@ -20,7 +19,7 @@ namespace MarilynJIT.TuringML.Nodes
 		}
 		public abstract TuringNode DeepClone();
 	}
-
+	[Serializable]
 	public sealed class NoOperation : TuringNode{
 		private static readonly Expression expression = Expression.Block();
 
@@ -34,6 +33,7 @@ namespace MarilynJIT.TuringML.Nodes
 			return this;
 		}
 	}
+	[Serializable]
 	public sealed class WhileBlock : TuringNode{
 		public TuringNode underlying;
 		public ushort condition;
@@ -100,7 +100,7 @@ namespace MarilynJIT.TuringML.Nodes
 			}
 		}
 	}
-
+	[Serializable]
 	public sealed class MemoryRead : TuringNode{
 		public static double Access(double[] memory, double address)
 		{
@@ -120,6 +120,7 @@ namespace MarilynJIT.TuringML.Nodes
 			return new MemoryRead { target = target };
 		}
 	}
+	[Serializable]
 	public sealed class MemoryWrite : TuringNode{
 		public ushort address;
 		public ushort value;

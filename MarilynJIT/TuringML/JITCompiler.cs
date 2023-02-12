@@ -48,7 +48,7 @@ namespace MarilynJIT.TuringML
 			{
 				expressions.Add(Expression.Assign(Expression.ArrayAccess(outputArray, Expression.Constant(i, typeof(int))), variables[i]));
 			}
-			return Expression.Block(Combine(variables, counter), expressions);
+			return Expression.Block(Combine(Combine(variables, counter), memoryArray), expressions);
 		}
 		public static Action<double[], double[]> CompileProfiling(TuringNode turingNode, ushort variablesCount, ushort argumentsCount, ulong loopLimit, out LightweightBranchCounter lightweightBranchCounter){
 			ParameterExpression array = Expression.Parameter(typeof(double[]));
