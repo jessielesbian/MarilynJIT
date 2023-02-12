@@ -47,21 +47,27 @@ namespace MarilynJIT.Tests
 				return 0 - temp;
 			}
 		}
-		private sealed class AdditionTrainingTuringMLRewardFunction : TuringML.IRewardFunction
+		private sealed class AdditionTrainingTestingEnvironment : ITestingEnvironment
 		{
-			public double GetScore(double[] inputs, double[] output1)
+			public double GetScore(Action<double[], double[]> action)
 			{
-				double output = output1[output1.Length - 1];
-				if (double.IsNaN(output) | double.IsInfinity(output))
+				double[] output = new double[256];
+				Span<long> span = stackalloc long[2];
+				RandomNumberGenerator.Fill(MemoryMarshal.AsBytes(span));
+				double x = span[0] / 65536.0;
+				double y = span[1] / 65536.0;
+				action(new double[] {x, y}, output);
+				double result = output[255];
+				if (double.IsNaN(result) | double.IsInfinity(result))
 				{
 					return double.NegativeInfinity;
 				}
-				double temp = Math.Abs(inputs[0] + inputs[1] - output);
-				if (temp == 0)
+				result = Math.Abs((x + y) - result);
+				if (result == 0)
 				{
 					return double.PositiveInfinity;
 				}
-				return 0 - temp;
+				return 0 - result;
 			}
 		}
 		[Test]
@@ -105,7 +111,7 @@ namespace MarilynJIT.Tests
 
 		[Test]
 		public async Task TuringMLTraining(){
-			await TuringML.Trainer.Train(new AdditionTrainingDataSource(), new AdditionTrainingTuringMLRewardFunction(), 16, 2, 2, 256, 2, 256, 256, 256, 4, 16, 16);
+			await TuringML.Trainer.Train(new AdditionTrainingTestingEnvironment(), 16, 2, 2, 256, 2, 256, 256, 256, 4, 16, 16, new Block());
 		}
 	}
 }

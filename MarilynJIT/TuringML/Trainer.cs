@@ -8,21 +8,20 @@ using MarilynJIT.KellySSA.Profiler;
 using MarilynJIT.TuringML.Nodes;
 using MarilynJIT.TuringML.Transform;
 using MarilynJIT.TuringML.Transform.KellySSA;
-using MarilynJIT.KellySSA;
 
 namespace MarilynJIT.TuringML
 {
-	public interface IRewardFunction{
-		public double GetScore(double[] inputs, double[] output);
+	public interface ITestingEnvironment{
+		public double GetScore(Action<double[], double[]> action);
 	}
 	public static class Trainer
 	{
-		public static async Task<TuringNode> Train(IDataSource dataSource, IRewardFunction rewardFunction, ushort variablesCount, ushort argumentsCount, int extendedArgumentsCount, ushort ssacomplexity, ulong iterations, int profilingRunsPerIteration, int heavilyOptimizedRunsPerIteration, ulong loopLimit, ulong coldBranchHyperoptimizationTreshold, ushort threads, int removeOutliers){
+		public static async Task<TuringNode> Train(ITestingEnvironment testingEnvironment, ushort variablesCount, ushort argumentsCount, int extendedArgumentsCount, ushort ssacomplexity, ulong iterations, int profilingRunsPerIteration, int heavilyOptimizedRunsPerIteration, ulong loopLimit, ulong coldBranchHyperoptimizationTreshold, ushort threads, int removeOutliers, TuringNode initialState){
 			WorkerThread[] workerThreads = new WorkerThread[threads];
 			Task[] tasks = new Task[threads];
 			double[] scores = new double[threads];
 			TuringNode[] bestNodes = new TuringNode[threads];
-			TuringNode bestNode = new Block();
+			TuringNode bestNode = initialState.DeepClone();
 			RandomTransformer randomTransformer = new RandomTransformer(variablesCount, ssacomplexity);
 
 			double bestScore = double.NegativeInfinity;
@@ -44,13 +43,9 @@ namespace MarilynJIT.TuringML
 
 				//Initial compilation with light optimizations + profiling
 				Action<double[], double[]> func = JITCompiler.CompileProfiling(mine, variablesCount, argumentsCount, loopLimit, out LightweightBranchCounter lightweightBranchCounter);
-				double[] buffer = buffers[threadid];
-				double[] output = outputs[threadid];
 
 				for (int i = 0; i < profilingRunsPerIteration; ++i){
-					dataSource.GetData(buffer);
-					func(buffer, output);
-					list.Add(rewardFunction.GetScore(buffer, output));
+					list.Add(testingEnvironment.GetScore(func));
 				}
 
 				new UnreachedBranchesStripper(0, false, variablesCount, lightweightBranchCounter).Visit(mine);
@@ -70,9 +65,7 @@ namespace MarilynJIT.TuringML
 
 				for (int i = 0; i < heavilyOptimizedRunsPerIteration; ++i)
 				{
-					dataSource.GetData(buffer);
-					func(buffer, output);
-					list.Add(rewardFunction.GetScore(buffer, output));
+					list.Add(testingEnvironment.GetScore(func));
 				}
 
 				double total = 0;
