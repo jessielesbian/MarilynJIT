@@ -26,7 +26,12 @@ namespace MarilynJIT.TuringML
 				return double.NaN;
 			}
 			if(dictionary.TryGetValue(Math.Floor(address / 4096), out double[] array)){
-				return array[4095 & (int)Math.Floor(address % 4096)];
+				int index = (int)Math.Floor(address % 4096);
+				if (index < 0)
+				{
+					index = 4095 - index;
+				}
+				return array[index];
 			}
 			return 0;
 		}
@@ -47,7 +52,11 @@ namespace MarilynJIT.TuringML
 					throw new AIBailoutException();
 				}
 			}
-			array[4095 & (int)Math.Floor(address % 4096)] = value;
+			int index = (int)Math.Floor(address % 4096);
+			if(index < 0){
+				index = 4095 - index;
+			}
+			array[index] = value;
 		}
 
 		private static void Free(VirtualMemoryManager virtualMemoryManager){
