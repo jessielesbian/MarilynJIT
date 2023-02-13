@@ -38,7 +38,7 @@ namespace MarilynJIT.TuringML
 			}
 
 			void ExecuteAgent(ushort threadid){
-				TuringNode mine = randomTransformer.Visit(bestNode.DeepClone());
+				TuringNode mine = randomTransformer.Visit(randomTransformer.Visit(bestNode.DeepClone()));
 				List<double> list = new List<double>(totalRunsPerIteration);
 
 				//Initial compilation with light optimizations + profiling

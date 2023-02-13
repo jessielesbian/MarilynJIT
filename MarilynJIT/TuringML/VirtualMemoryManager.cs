@@ -29,7 +29,7 @@ namespace MarilynJIT.TuringML
 				int index = (int)Math.Floor(address % 4096);
 				if (index < 0)
 				{
-					index = 4095 - index;
+					index += 4096;
 				}
 				return array[index];
 			}
@@ -54,7 +54,7 @@ namespace MarilynJIT.TuringML
 			}
 			int index = (int)Math.Floor(address % 4096);
 			if(index < 0){
-				index = 4095 - index;
+				index += 4096;
 			}
 			array[index] = value;
 		}
