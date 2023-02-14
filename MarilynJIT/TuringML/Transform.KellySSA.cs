@@ -51,7 +51,7 @@ namespace MarilynJIT.TuringML.Transform.KellySSA
 	}
 	public static class Transformer
 	{
-		public static Node[] GenerateInitial(ushort variablesCount, ushort complexity)
+		public static Node[] GenerateInitial(ushort variablesCount, ushort complexity, ushort argumentsCount)
 		{
 			if (variablesCount >= complexity)
 			{
@@ -67,7 +67,7 @@ namespace MarilynJIT.TuringML.Transform.KellySSA
 			{
 				nodes[i] = i < variablesCount ? new ArgumentNode(i) : RandomProgramGenerator.GenerateRandomNode(i);
 			}
-			nodes[complexity] = new CopyResults(complexity, (ushort)(complexity - variablesCount));
+			nodes[complexity] = new CopyResults(complexity, (ushort)(complexity - argumentsCount));
 			RandomProgramGenerator.StripStaticInvalidValues(nodes);
 			return nodes;
 		}
@@ -98,7 +98,6 @@ namespace MarilynJIT.TuringML.Transform.KellySSA
 			private readonly ushort size;
 			private readonly ushort start;
 
-
 			public CopyResults(ushort size, ushort start)
 			{
 				this.size = size;
@@ -107,11 +106,13 @@ namespace MarilynJIT.TuringML.Transform.KellySSA
 
 			public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
 			{
-				Expression[] expressions = new Expression[size - start];
-				ushort x = 0;
+				int delta = size - start;
+				int y = parameterExpressions.Length - delta;
+				Expression[] expressions = new Expression[delta];
+				int x = 0;
 				for (ushort i = start; i < size; ++i,++x)
 				{
-					expressions[x] = Expression.Assign(parameterExpressions[x], prevNodes[i]);
+					expressions[x] = Expression.Assign(parameterExpressions[x + y], prevNodes[i]);
 				}
 				return Expression.Block(expressions);
 			}

@@ -33,7 +33,7 @@ namespace MarilynJIT.Tests
 				buffer[1] = span[1] / 1024.0;
 			}
 		}
-		private sealed class AdditionTrainingRewardFunction : KellySSA.IRewardFunction
+		private sealed class AdditionTrainingRewardFunction : IRewardFunction
 		{
 			public double GetScore(double[] inputs, double output)
 			{
@@ -51,13 +51,18 @@ namespace MarilynJIT.Tests
 		{
 			public double GetScore(Action<double[], double[], int> action)
 			{
-				double[] output = new double[256];
+				double[] output = new double[16];
 				Span<long> span = stackalloc long[2];
 				RandomNumberGenerator.Fill(MemoryMarshal.AsBytes(span));
 				double x = span[0] / 65536.0;
 				double y = span[1] / 65536.0;
-				action(new double[] {x, y}, output, 4096);
-				double result = output[255];
+				try{
+					action(new double[] { x, y }, output, 4096);
+				} catch(AIBailoutException){
+					return double.NegativeInfinity;
+				}
+				string json = JsonConvert.SerializeObject(output) + "\n";
+				double result = output[15];
 				if (double.IsNaN(result) | double.IsInfinity(result))
 				{
 					return double.NegativeInfinity;
@@ -93,7 +98,7 @@ namespace MarilynJIT.Tests
 
 		[Test]
 		public void TuringMLJITCompiler(){
-			RandomTransformer randomTransformer = new RandomTransformer(16, 256);
+			RandomTransformer randomTransformer = new RandomTransformer(16, 256, 1);
 			TuringNode turingNode = new Block();
 			ParameterExpression[] variables = new ParameterExpression[16];
 			for (byte i = 0; i < 16; ++i)
@@ -104,14 +109,15 @@ namespace MarilynJIT.Tests
 				turingNode = randomTransformer.Visit(turingNode);
 			}
 			turingNode.Compile(variables, Expression.Block(), Expression.Variable(typeof(double[])), null);
-			using MemoryStream memoryStream = new MemoryStream(); TuringML.Nodes.Serialization.Serialize(turingNode, memoryStream);
+			using MemoryStream memoryStream = new MemoryStream();
+			TuringML.Nodes.Serialization.Serialize(turingNode, memoryStream);
 			memoryStream.Seek(0, SeekOrigin.Begin);
 			TuringML.Nodes.Serialization.Deserialize(memoryStream);
 		}
 
 		[Test]
 		public async Task TuringMLTraining(){
-			await TuringML.Trainer.Train(new AdditionTrainingTestingEnvironment(), 16, 2, 2, 256, 2, 256, 256, 256, 4, 16, 16, new Block());
+			await TuringML.Trainer.Train(new AdditionTrainingTestingEnvironment(), 16, 2, 2, 256, 16, 256, 256, 256, 4, 16, 16, new Block());
 		}
 	}
 }

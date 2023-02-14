@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -17,7 +19,103 @@ namespace MarilynJIT.TuringML.Nodes
 		public virtual void VisitChildren(IVisitor visitor){
 			
 		}
-		public abstract TuringNode DeepClone();
+		protected abstract TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair);
+		private sealed class BlackHoleDictionary : IDictionary<TuringNode, TuringNode>
+		{
+			public TuringNode this[TuringNode key] { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+			public ICollection<TuringNode> Keys => throw new NotImplementedException();
+
+			public ICollection<TuringNode> Values => throw new NotImplementedException();
+
+			public int Count => throw new NotImplementedException();
+
+			public bool IsReadOnly => throw new NotImplementedException();
+
+			public void Add(TuringNode key, TuringNode value)
+			{
+				
+			}
+
+			public void Add(KeyValuePair<TuringNode, TuringNode> item)
+			{
+				throw new NotImplementedException();
+			}
+
+			public void Clear()
+			{
+				throw new NotImplementedException();
+			}
+
+			public bool Contains(KeyValuePair<TuringNode, TuringNode> item)
+			{
+				throw new NotImplementedException();
+			}
+
+			public bool ContainsKey(TuringNode key)
+			{
+				throw new NotImplementedException();
+			}
+
+			public void CopyTo(KeyValuePair<TuringNode, TuringNode>[] array, int arrayIndex)
+			{
+				throw new NotImplementedException();
+			}
+
+			public IEnumerator<KeyValuePair<TuringNode, TuringNode>> GetEnumerator()
+			{
+				throw new NotImplementedException();
+			}
+
+			public bool Remove(TuringNode key)
+			{
+				throw new NotImplementedException();
+			}
+
+			public bool Remove(KeyValuePair<TuringNode, TuringNode> item)
+			{
+				throw new NotImplementedException();
+			}
+
+			public bool TryGetValue(TuringNode key, [MaybeNullWhen(false)] out TuringNode value)
+			{
+				throw new NotImplementedException();
+			}
+
+			IEnumerator IEnumerable.GetEnumerator()
+			{
+				throw new NotImplementedException();
+			}
+		}
+		public TuringNode DeepClone()
+		{
+			return DeepCloneIMPL(new Dictionary<TuringNode, TuringNode>(ReferenceEqualityComparer.Instance));
+		}
+		public TuringNode DeepClone(IDictionary<TuringNode, TuringNode> keyValuePairs)
+		{
+			TuringNode cloned = DeepCloneIMPL(keyValuePairs);
+			keyValuePairs.Add(cloned, this);
+			return cloned;
+		}
+	}
+	public sealed class ProfilingCode : TuringNode
+	{
+		private readonly TuringNode underlying;
+
+		public ProfilingCode(TuringNode underlying)
+		{
+			this.underlying = underlying ?? throw new ArgumentNullException(nameof(underlying));
+		}
+
+		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
+		{
+			return underlying.Compile(variables, safepoint, memoryArray, profilingCodeGenerator);
+		}
+
+		protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
+		{
+			return new ProfilingCode(underlying.DeepClone(keyValuePair));
+		}
 	}
 	[Serializable]
 	public sealed class NoOperation : TuringNode{
@@ -28,9 +126,9 @@ namespace MarilynJIT.TuringML.Nodes
 			return expression;
 		}
 
-		public override TuringNode DeepClone()
+		protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
 		{
-			return this;
+			return new NoOperation();
 		}
 	}
 	[Serializable]
@@ -45,9 +143,9 @@ namespace MarilynJIT.TuringML.Nodes
 			return Expression.Loop(Expression.IfThenElse(Expression.GreaterThan(variables[condition], zero), Expression.Block(safepoint, underlying.Compile(variables, safepoint, memoryArray, profilingCodeGenerator)), Expression.Break(breakTarget)), breakTarget);
 		}
 
-		public override TuringNode DeepClone()
+		protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
 		{
-			return new WhileBlock { underlying = underlying.DeepClone(), condition = condition};
+			return new WhileBlock { underlying = underlying.DeepClone(keyValuePair), condition = condition};
 		}
 		public override void VisitChildren(IVisitor visitor)
 		{
@@ -69,19 +167,20 @@ namespace MarilynJIT.TuringML.Nodes
 			}
 			return Expression.Block(compiled);
 		}
-		private static IEnumerable<TuringNode> DeepCopyChildNodes(List<TuringNode> turingNodes){
+		private static IEnumerable<TuringNode> DeepCopyChildNodes(List<TuringNode> turingNodes, IDictionary<TuringNode, TuringNode> keyValuePair)
+		{
 			foreach(TuringNode turingNode in turingNodes){
-				TuringNode turingNode1 = turingNode.DeepClone();
+				TuringNode turingNode1 = turingNode.DeepClone(keyValuePair);
 				if(turingNode1 is NoOperation){
 					continue;
 				}
 				yield return turingNode1;
 			}
 		}
-		public override TuringNode DeepClone()
+		protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
 		{
 			Block block = new Block();
-			block.turingNodes.AddRange(DeepCopyChildNodes(turingNodes));
+			block.turingNodes.AddRange(DeepCopyChildNodes(turingNodes, keyValuePair));
 			return block;
 		}
 		public override void VisitChildren(IVisitor visitor)
@@ -112,7 +211,7 @@ namespace MarilynJIT.TuringML.Nodes
 			return Expression.Assign(variable, Expression.Call(memoryArray, read, variable));
 		}
 
-		public override TuringNode DeepClone()
+		protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
 		{
 			return new MemoryRead { target = target };
 		}
@@ -128,7 +227,7 @@ namespace MarilynJIT.TuringML.Nodes
 			return Expression.Call(memoryArray, write, variables[address], variables[value]);
 		}
 
-		public override TuringNode DeepClone()
+		protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
 		{
 			return new MemoryWrite { address = address, value = value };
 		}
@@ -154,7 +253,7 @@ namespace MarilynJIT.TuringML.Nodes
 			}
 			return (Node[])nodes.Clone();
 		}
-		public override TuringNode DeepClone()
+		protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
 		{
 			return new KellySSABasicBlock { nodes = Copy(nodes), optimized = Copy(optimized) };
 		}

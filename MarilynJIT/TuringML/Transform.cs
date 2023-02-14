@@ -33,14 +33,16 @@ namespace MarilynJIT.TuringML.Transform
 	{
 		private readonly ushort variablesCount;
 		private readonly ushort basicBlockComplexity;
+		private readonly ushort argumentsCount;
 
-		public RandomTransformer(ushort variablesCount, ushort basicBlockComplexity)
+		public RandomTransformer(ushort variablesCount, ushort basicBlockComplexity, ushort argumentsCount)
 		{
 			this.variablesCount = variablesCount;
 			this.basicBlockComplexity = basicBlockComplexity;
+			this.argumentsCount = argumentsCount;
 		}
 
-		public static TuringNode GetRandomNode(ushort variablesCount, ushort basicBlockComplexity){
+		public static TuringNode GetRandomNode(ushort variablesCount, ushort basicBlockComplexity, ushort argumentsCount){
 			int choice = RandomNumberGenerator.GetInt32(0, 4);
 			switch(choice){
 				case 0:
@@ -48,7 +50,7 @@ namespace MarilynJIT.TuringML.Transform
 				case 1:
 					return new MemoryWrite { address = (ushort)RandomNumberGenerator.GetInt32(0, variablesCount), value = (ushort)RandomNumberGenerator.GetInt32(0, variablesCount) };
 				default:
-					TuringNode turingNode = new KellySSABasicBlock { nodes = Transformer.GenerateInitial(variablesCount, basicBlockComplexity) };
+					TuringNode turingNode = new KellySSABasicBlock { nodes = Transformer.GenerateInitial(variablesCount, basicBlockComplexity, argumentsCount) };
 					if (choice == 3)
 					{
 						Block block = new Block();
@@ -63,7 +65,7 @@ namespace MarilynJIT.TuringML.Transform
 			if(turingNode is Block block){
 				int count = block.turingNodes.Count;
 				if(count == 0){
-					block.turingNodes.Add(GetRandomNode(variablesCount, basicBlockComplexity));
+					block.turingNodes.Add(GetRandomNode(variablesCount, basicBlockComplexity, argumentsCount));
 					return turingNode;
 				}
 				int target = RandomNumberGenerator.GetInt32(0, count);
@@ -72,7 +74,7 @@ namespace MarilynJIT.TuringML.Transform
 						Visit(block.turingNodes[target]);
 						return turingNode;
 					case 1:
-						block.turingNodes.Insert(target, GetRandomNode(variablesCount, basicBlockComplexity));
+						block.turingNodes.Insert(target, GetRandomNode(variablesCount, basicBlockComplexity, argumentsCount));
 						return turingNode;
 					default:
 						block.turingNodes.RemoveAt(target);
@@ -108,5 +110,36 @@ namespace MarilynJIT.TuringML.Transform
 			return turingNode;
 		}
 	}
-	
+	public sealed class NodeGrabber<T> : IVisitor where T : TuringNode
+	{
+		private readonly Queue<T> queue;
+		public NodeGrabber(Queue<T> queue)
+		{
+			this.queue = queue ?? throw new ArgumentNullException(nameof(queue));
+		}
+
+		public TuringNode Visit(TuringNode turingNode)
+		{
+			if(turingNode is T grabbed){
+				queue.Enqueue(grabbed);
+			}
+			turingNode.VisitChildren(this);
+			return turingNode;
+		}
+	}
+	public sealed class MassRemovalVisitor<T> : IVisitor where T : TuringNode{
+		public static readonly IVisitor instance = new MassRemovalVisitor<T>();
+		private MassRemovalVisitor(){
+			
+		}
+
+		public TuringNode Visit(TuringNode turingNode)
+		{
+			if(turingNode is T){
+				return new NoOperation();
+			}
+			turingNode.VisitChildren(this);
+			return turingNode;
+		}
+	}
 }

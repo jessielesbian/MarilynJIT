@@ -1,9 +1,14 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
+using MarilynJIT.KellySSA;
+using MarilynJIT.KellySSA.Nodes;
 using MarilynJIT.KellySSA.Profiler;
 using MarilynJIT.TuringML.Nodes;
 using MarilynJIT.TuringML.Transform;
@@ -16,13 +21,88 @@ namespace MarilynJIT.TuringML
 	}
 	public static class Trainer
 	{
+		private readonly struct KellySSARecombinantModificationTask{
+			public readonly KellySSABasicBlock kellySSABasicBlock;
+			public readonly TuringNode root;
+
+			public KellySSARecombinantModificationTask(KellySSABasicBlock kellySSABasicBlock, TuringNode root)
+			{
+				this.kellySSABasicBlock = kellySSABasicBlock ?? throw new ArgumentNullException(nameof(kellySSABasicBlock));
+				this.root = root ?? throw new ArgumentNullException(nameof(root));
+			}
+		}
+
+		[ThreadStatic]
+		private static Dictionary<int, Block> unreachedCode;
+
+		private static void Remove(int id){
+			unreachedCode.Remove(id);
+		}
+		private static readonly MethodInfo remove = new Action<int>(Remove).Method;
+		private sealed class MarkReachableNode : TuringNode{
+			private readonly int id;
+
+			public MarkReachableNode(int id)
+			{
+				this.id = id;
+			}
+
+			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
+			{
+				return Expression.Call(remove, Expression.Constant(id, typeof(int)));
+			}
+
+			protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
+			{
+				return new MarkReachableNode(id);
+			}
+		}
+
+		private sealed class LivenessProfilingCodeInjector : IVisitor
+		{
+			private readonly Dictionary<TuringNode, bool> knownNodes = new Dictionary<TuringNode, bool>(ReferenceEqualityComparer.Instance);
+			public TuringNode Visit(TuringNode turingNode)
+			{
+				if(knownNodes.TryAdd(turingNode, false)){
+					if(turingNode is Block block){
+						int id = knownNodes.Count;
+						block.turingNodes.Add(new ProfilingCode(new MarkReachableNode(id)));
+						unreachedCode.Add(id, block);
+					}
+					turingNode.VisitChildren(this);
+				}
+				return turingNode;
+			}
+		}
+		private sealed class UnreachedLoopsStripper : IVisitor
+		{
+			private readonly Dictionary<TuringNode, bool> blacklist = new Dictionary<TuringNode, bool>(ReferenceEqualityComparer.Instance);
+			private static readonly TuringNode nop = new NoOperation();
+			public UnreachedLoopsStripper(){
+				foreach(TuringNode turingNode in unreachedCode.Values){
+					blacklist.Add(turingNode, false);
+				}
+			}
+			public TuringNode Visit(TuringNode turingNode)
+			{
+				if(turingNode is WhileBlock whileBlock){
+					if (blacklist.ContainsKey(whileBlock.underlying))
+					{
+						return nop;
+					}
+				}
+				turingNode.VisitChildren(this);
+				return turingNode;
+
+			}
+		}
 		public static async Task<TuringNode> Train(ITestingEnvironment testingEnvironment, ushort variablesCount, ushort argumentsCount, int extendedArgumentsCount, ushort ssacomplexity, ulong iterations, int profilingRunsPerIteration, int heavilyOptimizedRunsPerIteration, ulong loopLimit, ulong coldBranchHyperoptimizationTreshold, ushort threads, int removeOutliers, TuringNode initialState){
 			WorkerThread[] workerThreads = new WorkerThread[threads];
 			Task[] tasks = new Task[threads];
 			double[] scores = new double[threads];
 			TuringNode[] bestNodes = new TuringNode[threads];
 			TuringNode bestNode = initialState.DeepClone();
-			RandomTransformer randomTransformer = new RandomTransformer(variablesCount, ssacomplexity);
+			RandomTransformer randomTransformer = new RandomTransformer(variablesCount, ssacomplexity, argumentsCount);
 
 			double bestScore = double.NegativeInfinity;
 			int totalRunsPerIteration = profilingRunsPerIteration + heavilyOptimizedRunsPerIteration;
@@ -38,19 +118,35 @@ namespace MarilynJIT.TuringML
 			}
 
 			void ExecuteAgent(ushort threadid){
-				TuringNode mine = randomTransformer.Visit(randomTransformer.Visit(bestNode.DeepClone()));
+
+				double total = TestAgent(randomTransformer.Visit(randomTransformer.Visit(bestNode.DeepClone())), true, out TuringNode mine);
+				if (total > scores[threadid]){
+					scores[threadid] = total;
+					bestNodes[threadid] = mine;
+				}
+			}
+
+			double TestAgent(TuringNode mine, bool dostrip, out TuringNode newval){
 				List<double> list = new List<double>(totalRunsPerIteration);
 
 				//Initial compilation with light optimizations + profiling
 				Action<double[], double[], int> func = JITCompiler.CompileProfiling(mine, variablesCount, argumentsCount, loopLimit, out LightweightBranchCounter lightweightBranchCounter);
 
-				for (int i = 0; i < profilingRunsPerIteration; ++i){
+				unreachedCode = unreachedCode is null ? new() : throw new Exception("This thread already has an unreachable code profiler running (should not reach here)");
+				mine = new LivenessProfilingCodeInjector().Visit(mine);
+
+				for (int i = 0; i < profilingRunsPerIteration; ++i)
+				{
 					list.Add(testingEnvironment.GetScore(func));
 				}
+				mine = MassRemovalVisitor<ProfilingCode>.instance.Visit(new UnreachedLoopsStripper().Visit(mine));
+				newval = mine;
+				unreachedCode = null;
 
 				new UnreachedBranchesStripper(0, false, variablesCount, lightweightBranchCounter).Visit(mine);
 
-				if(coldBranchHyperoptimizationTreshold > 0){
+				if (coldBranchHyperoptimizationTreshold > 0)
+				{
 					new UnreachedBranchesStripper(coldBranchHyperoptimizationTreshold, true, variablesCount, lightweightBranchCounter).Visit(mine);
 				}
 
@@ -58,7 +154,7 @@ namespace MarilynJIT.TuringML
 				func = JITCompiler.Compile(mine, variablesCount, argumentsCount, loopLimit);
 
 				//Strip optimized version
-				if (coldBranchHyperoptimizationTreshold > 0)
+				if (coldBranchHyperoptimizationTreshold > 0 & dostrip)
 				{
 					KellySSAOptimizedVersionStripper.instance.Visit(mine);
 				}
@@ -74,20 +170,36 @@ namespace MarilynJIT.TuringML
 				for (int i = removeOutliers; i < endOfResults; ++i)
 				{
 					double score = list[i];
-					if(double.IsInfinity(score)){
-						total = score;
-						break;
+					if (double.IsInfinity(score) | double.IsNaN(score))
+					{
+						return score;
 					}
 					total += score;
 				}
+				return total;
+			}
+			
+			Queue<KellySSABasicBlock> kellySSABasicBlocks = new Queue<KellySSABasicBlock>();
+			NodeGrabber<KellySSABasicBlock> nodeGrabber = new NodeGrabber<KellySSABasicBlock>(kellySSABasicBlocks);
+			ConcurrentBag<KellySSARecombinantModificationTask> kellySSARecombinantModificationTasks = new();
+			Dictionary<TuringNode, KellySSABasicBlock> mapping = new(ReferenceEqualityComparer.Instance);
 
-				if (total > scores[threadid]){
-					scores[threadid] = total;
-					bestNodes[threadid] = mine;
+
+			void ExecuteKellySSARecombinantTrainer(){
+				while(kellySSARecombinantModificationTasks.TryTake(out KellySSARecombinantModificationTask task)){
+					KellySSABasicBlock kellySSABasicBlock = task.kellySSABasicBlock;
+					Node[] nodes = kellySSABasicBlock.nodes;
+					Transformer.RandomMutate(nodes, variablesCount);
+
+					double score = TestAgent(task.root, false, out _);
+					if (score > bestScore){
+						mapping[kellySSABasicBlock].nodes = nodes;
+					}
 				}
 			}
 
-			for(ulong x = 0; x < iterations; ++x){
+
+			for (ulong x = 0; x < iterations; ++x){
 				for (ushort i = 0; i < threads; ++i)
 				{
 					ushort copy = i;
@@ -97,13 +209,59 @@ namespace MarilynJIT.TuringML
 				for (ushort i = 0; i < threads; ++i)
 				{
 					double score = scores[i];
-					if(score == double.PositiveInfinity){
+					//await System.IO.File.AppendAllTextAsync("c:\\users\\jessi\\desktop\\log.txt", score.ToString() + "\n");
+					if (score == double.PositiveInfinity){
 						return bestNodes[i];
 					}
 					if(score > bestScore){
+						Console.WriteLine(score);
 						bestScore = score;
 						bestNode = bestNodes[i];
 					}
+				}
+
+				TuringNode mine = bestNode.DeepClone();
+				nodeGrabber.Visit(mine);
+				if(kellySSABasicBlocks.Count == 0){
+					continue;
+				}
+				while (kellySSABasicBlocks.TryDequeue(out KellySSABasicBlock kellySSABasicBlock))
+				{
+					Dictionary<TuringNode, TuringNode> tempMapping = new(ReferenceEqualityComparer.Instance);
+					TuringNode clone = mine.DeepClone(tempMapping);
+					foreach (KeyValuePair<TuringNode, TuringNode> keyValuePair in tempMapping)
+					{
+						TuringNode key = keyValuePair.Key;
+						TuringNode value = keyValuePair.Value;
+						
+						if (ReferenceEquals(value, kellySSABasicBlock))
+						{
+							mapping.Add(key, kellySSABasicBlock);
+							kellySSARecombinantModificationTasks.Add(new((KellySSABasicBlock)key, clone));
+							goto done;
+						}
+					}
+					
+					throw new Exception("Unable to retrace deep cloned KellySSA basic block (should not reach here)");
+				done:;
+				}
+				if(kellySSARecombinantModificationTasks.IsEmpty){
+					continue;
+				}
+				for (ushort i = 0; i < threads; ++i)
+				{
+					tasks[i] = workerThreads[i].EnqueueWork(ExecuteKellySSARecombinantTrainer);
+				}
+				await Task.WhenAll(tasks);
+				mapping.Clear();
+				double score1 = TestAgent(mine, true, out mine);
+				if(score1 == double.PositiveInfinity){
+					return mine;
+				}
+				if (score1 > bestScore)
+				{
+					bestScore = score1;
+					bestNode = mine;
 				}
 			}
 			return bestNode;

@@ -1,6 +1,7 @@
 ﻿using MarilynJIT.KellySSA;
 using Newtonsoft.Json;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq.Expressions;
 using System.Runtime.Serialization.Formatters.Binary;
@@ -19,7 +20,7 @@ namespace MarilynJIT.TuringML.Nodes
 				throw new NotImplementedException();
 			}
 
-			public override TuringNode DeepClone()
+			protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
 			{
 				throw new NotImplementedException();
 			}
@@ -34,7 +35,7 @@ namespace MarilynJIT.TuringML.Nodes
 				throw new NotImplementedException();
 			}
 
-			public override TuringNode DeepClone()
+			protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
 			{
 				throw new NotImplementedException();
 			}
