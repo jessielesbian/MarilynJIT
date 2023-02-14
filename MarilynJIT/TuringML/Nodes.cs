@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Security.Cryptography;
 using MarilynJIT.KellySSA;
 using MarilynJIT.KellySSA.Nodes;
+using Newtonsoft.Json;
 
 namespace MarilynJIT.TuringML.Nodes
 {
@@ -18,6 +19,17 @@ namespace MarilynJIT.TuringML.Nodes
 		public abstract Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator? profilingCodeGenerator);
 		public virtual void VisitChildren(IVisitor visitor){
 			
+		}
+		public virtual TuringNode PrepareForSerialization(){
+			foreach(object obj in GetType().GetCustomAttributes(false)){
+				if(obj is SerializableAttribute){
+					return this;
+				}
+			}
+			throw new Exception("This node is non-serializable");
+		}
+		public virtual TuringNode AfterDeserialization(){
+			return this;
 		}
 		protected abstract TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair);
 		private sealed class BlackHoleDictionary : IDictionary<TuringNode, TuringNode>
@@ -154,6 +166,31 @@ namespace MarilynJIT.TuringML.Nodes
 	}
 
 	public sealed class Block : TuringNode{
+		[Serializable]
+		private sealed class SerializableBlock : TuringNode
+		{
+			public TuringNode[] turingNodes;
+
+			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
+			{
+				throw new NotImplementedException();
+			}
+
+			protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
+			{
+				throw new NotImplementedException();
+			}
+			public override TuringNode AfterDeserialization()
+			{
+				Block block = new Block();
+				block.turingNodes.AddRange(turingNodes);
+				return block;
+			}
+		}
+		public override TuringNode PrepareForSerialization()
+		{
+			return new SerializableBlock { turingNodes = turingNodes.ToArray() };
+		}
 		public readonly List<TuringNode> turingNodes = new List<TuringNode>();
 
 		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
@@ -235,6 +272,25 @@ namespace MarilynJIT.TuringML.Nodes
 	
 	public sealed class KellySSABasicBlock : TuringNode
 	{
+		[Serializable]
+		private sealed class SerializableKellySSABasicBlock : TuringNode
+		{
+			public string json;
+
+			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
+			{
+				throw new NotImplementedException();
+			}
+
+			protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
+			{
+				throw new NotImplementedException();
+			}
+			public override TuringNode AfterDeserialization()
+			{
+				return new KellySSABasicBlock { nodes = KellySSA.Nodes.Serialization.DeserializeJsonNodesArray(json) };
+			}
+		}
 		public Node[] nodes;
 		public Node[] optimized;
 
@@ -256,6 +312,10 @@ namespace MarilynJIT.TuringML.Nodes
 		protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
 		{
 			return new KellySSABasicBlock { nodes = Copy(nodes), optimized = Copy(optimized) };
+		}
+		public override TuringNode PrepareForSerialization()
+		{
+			return new SerializableKellySSABasicBlock { json = JsonConvert.SerializeObject(nodes) };
 		}
 	}
 }

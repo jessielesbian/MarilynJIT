@@ -10,54 +10,14 @@ namespace MarilynJIT.TuringML.Nodes
 {
 	public static class Serialization
 	{
-		[Serializable]
-		private sealed class SerializableBlock : TuringNode
-		{
-			public TuringNode[] turingNodes;
-
-			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
-			{
-				throw new NotImplementedException();
-			}
-
-			protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
-			{
-				throw new NotImplementedException();
-			}
-		}
-		[Serializable]
-		private sealed class SerializableKellySSABasicBlock : TuringNode
-		{
-			public string json;
-
-			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
-			{
-				throw new NotImplementedException();
-			}
-
-			protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
-			{
-				throw new NotImplementedException();
-			}
-		}
+		
+		
 		private sealed class BeforeSerialize : IVisitor
 		{
 			public TuringNode Visit(TuringNode turingNode)
 			{
 				turingNode.VisitChildren(this);
-				if (turingNode is Block block)
-				{
-					SerializableBlock serializableBlock = new SerializableBlock();
-					serializableBlock.turingNodes = block.turingNodes.ToArray();
-					return serializableBlock;
-				}
-				if (turingNode is KellySSABasicBlock kellySSABasicBlock)
-				{
-					SerializableKellySSABasicBlock serializableKellySSABasicBlock = new();
-					serializableKellySSABasicBlock.json = JsonConvert.SerializeObject(kellySSABasicBlock.nodes);
-					return serializableKellySSABasicBlock;
-				}
-				return turingNode;
+				return turingNode.PrepareForSerialization();
 			}
 		}
 		private sealed class AfterSerialize : IVisitor
@@ -65,19 +25,7 @@ namespace MarilynJIT.TuringML.Nodes
 			public TuringNode Visit(TuringNode turingNode)
 			{
 				turingNode.VisitChildren(this);
-				if (turingNode is SerializableBlock serializableBlock)
-				{
-					Block block = new Block();
-					block.turingNodes.AddRange(serializableBlock.turingNodes);
-					return block;
-				}
-				if (turingNode is SerializableKellySSABasicBlock serializableKellySSABasicBlock)
-				{
-					KellySSABasicBlock kellySSABasicBlock = new();
-					kellySSABasicBlock.nodes = KellySSA.Nodes.Serialization.DeserializeJsonNodesArray(serializableKellySSABasicBlock.json);
-					return kellySSABasicBlock;
-				}
-				return turingNode;
+				return turingNode.AfterDeserialization();
 			}
 		}
 
