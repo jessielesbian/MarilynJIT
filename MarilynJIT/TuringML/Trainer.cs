@@ -32,70 +32,7 @@ namespace MarilynJIT.TuringML
 			}
 		}
 
-		[ThreadStatic]
-		private static Dictionary<int, Block> unreachedCode;
-
-		private static void Remove(int id){
-			unreachedCode.Remove(id);
-		}
-		private static readonly MethodInfo remove = new Action<int>(Remove).Method;
-		private sealed class MarkReachableNode : TuringNode{
-			private readonly int id;
-
-			public MarkReachableNode(int id)
-			{
-				this.id = id;
-			}
-
-			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
-			{
-				return Expression.Call(remove, Expression.Constant(id, typeof(int)));
-			}
-
-			protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
-			{
-				return new MarkReachableNode(id);
-			}
-		}
-
-		private sealed class LivenessProfilingCodeInjector : IVisitor
-		{
-			private readonly Dictionary<TuringNode, bool> knownNodes = new Dictionary<TuringNode, bool>(ReferenceEqualityComparer.Instance);
-			public TuringNode Visit(TuringNode turingNode)
-			{
-				if(knownNodes.TryAdd(turingNode, false)){
-					if(turingNode is Block block){
-						int id = knownNodes.Count;
-						block.turingNodes.Add(new ProfilingCode(new MarkReachableNode(id)));
-						unreachedCode.Add(id, block);
-					}
-					turingNode.VisitChildren(this);
-				}
-				return turingNode;
-			}
-		}
-		private sealed class UnreachedLoopsStripper : IVisitor
-		{
-			private readonly Dictionary<TuringNode, bool> blacklist = new Dictionary<TuringNode, bool>(ReferenceEqualityComparer.Instance);
-			private static readonly TuringNode nop = new NoOperation();
-			public UnreachedLoopsStripper(){
-				foreach(TuringNode turingNode in unreachedCode.Values){
-					blacklist.Add(turingNode, false);
-				}
-			}
-			public TuringNode Visit(TuringNode turingNode)
-			{
-				if(turingNode is WhileBlock whileBlock){
-					if (blacklist.ContainsKey(whileBlock.underlying))
-					{
-						return nop;
-					}
-				}
-				turingNode.VisitChildren(this);
-				return turingNode;
-
-			}
-		}
+		
 		public static async Task<TuringNode> Train(ITestingEnvironment testingEnvironment, ushort variablesCount, ushort argumentsCount, int extendedArgumentsCount, ushort ssacomplexity, ulong iterations, int profilingRunsPerIteration, int heavilyOptimizedRunsPerIteration, ulong loopLimit, ulong coldBranchHyperoptimizationTreshold, ushort threads, int removeOutliers, TuringNode initialState){
 			WorkerThread[] workerThreads = new WorkerThread[threads];
 			Task[] tasks = new Task[threads];
@@ -132,16 +69,20 @@ namespace MarilynJIT.TuringML
 				//Initial compilation with light optimizations + profiling
 				Action<double[], double[], int> func = JITCompiler.CompileProfiling(mine, variablesCount, argumentsCount, loopLimit, out LightweightBranchCounter lightweightBranchCounter);
 
-				unreachedCode = unreachedCode is null ? new() : throw new Exception("This thread already has an unreachable code profiler running (should not reach here)");
-				mine = new LivenessProfilingCodeInjector().Visit(mine);
 
-				for (int i = 0; i < profilingRunsPerIteration; ++i)
-				{
-					list.Add(testingEnvironment.GetScore(func));
+				using(ThreadPrivateProfiler threadPrivateProfiler = ThreadPrivateProfiler.Create()){
+					mine = threadPrivateProfiler.livenessProfilingCodeInjector.Visit(mine);
+					for (int i = 0; i < profilingRunsPerIteration; ++i)
+					{
+						list.Add(testingEnvironment.GetScore(func));
+					}
+					mine = threadPrivateProfiler.unreachedLoopsStripper.Visit(mine);
 				}
-				mine = MassRemovalVisitor<ProfilingCode>.instance.Visit(new UnreachedLoopsStripper().Visit(mine));
+				mine = MassRemovalVisitor<ProfilingCode>.instance.Visit(mine);
 				newval = mine;
-				unreachedCode = null;
+				
+				
+				
 
 				new UnreachedBranchesStripper(0, false, variablesCount, lightweightBranchCounter).Visit(mine);
 
@@ -214,7 +155,6 @@ namespace MarilynJIT.TuringML
 						return bestNodes[i];
 					}
 					if(score > bestScore){
-						Console.WriteLine(score);
 						bestScore = score;
 						bestNode = bestNodes[i];
 					}

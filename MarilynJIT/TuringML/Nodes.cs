@@ -240,7 +240,7 @@ namespace MarilynJIT.TuringML.Nodes
 
 		public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
 		{
-			Expression compiled = KellySSA.JITCompiler.Compile(nodes, variables);
+			Expression compiled = KellySSA.JITCompiler.Compile(nodes, variables, profilingCodeGenerator: profilingCodeGenerator);
 			if(optimized is null){
 				return compiled;
 			}

@@ -10,6 +10,7 @@ using System.Security.Cryptography;
 using MarilynJIT.TuringML.Transform.KellySSA;
 using System.Text;
 using System.Threading.Tasks;
+using System.Reflection;
 
 namespace MarilynJIT.TuringML.Transform
 {
@@ -69,15 +70,16 @@ namespace MarilynJIT.TuringML.Transform
 					return turingNode;
 				}
 				int target = RandomNumberGenerator.GetInt32(0, count);
-				switch(RandomNumberGenerator.GetInt32(0, 3)){
+				switch(RandomNumberGenerator.GetInt32(0, 16)){
 					case 0:
-						Visit(block.turingNodes[target]);
+						block.turingNodes.RemoveAt(target);
 						return turingNode;
 					case 1:
 						block.turingNodes.Insert(target, GetRandomNode(variablesCount, basicBlockComplexity, argumentsCount));
 						return turingNode;
 					default:
-						block.turingNodes.RemoveAt(target);
+						
+						Visit(block.turingNodes[target]);
 						return turingNode;
 				}
 			}
@@ -140,6 +142,137 @@ namespace MarilynJIT.TuringML.Transform
 			}
 			turingNode.VisitChildren(this);
 			return turingNode;
+		}
+	}
+	public sealed class ThreadPrivateProfiler : IDisposable{
+
+		public readonly IVisitor livenessProfilingCodeInjector;
+		public readonly IVisitor unreachedLoopsStripper;
+		private ThreadPrivateProfiler(){
+			unreachedLoopsStripper = new UnreachedLoopsStripper(this, unreachedCode);
+			livenessProfilingCodeInjector = new LivenessProfilingCodeInjector(unreachedCode);
+		}
+
+		public static ThreadPrivateProfiler Create(){
+			if(threadPrivateProfiler is null){
+				ThreadPrivateProfiler temp = new ThreadPrivateProfiler();
+				threadPrivateProfiler = temp;
+				return temp;
+			} else{
+				throw new Exception("This thread has already created a thread-private profiler");
+			}
+		}
+		
+		[ThreadStatic]
+		private static ThreadPrivateProfiler threadPrivateProfiler;
+
+		private readonly Dictionary<int, Block> unreachedCode = new Dictionary<int, Block>();
+
+		private static void Remove(int id)
+		{
+			threadPrivateProfiler.unreachedCode.Remove(id);
+		}
+
+		private static void CheckBelongToThread(ThreadPrivateProfiler me){
+			if(ReferenceEquals(threadPrivateProfiler, me)){
+				return;
+			}
+			throw new Exception("This thread-private profiler does not belong to this thread");
+		}
+
+		public void Dispose()
+		{
+			CheckBelongToThread(this);
+			threadPrivateProfiler = null;
+		}
+
+		private static readonly MethodInfo remove = new Action<int>(Remove).Method;
+		private sealed class MarkReachableNode : TuringNode
+		{
+			private readonly int id;
+
+			public MarkReachableNode(int id)
+			{
+				this.id = id;
+			}
+
+			public override Expression Compile(ReadOnlySpan<ParameterExpression> variables, Expression safepoint, ParameterExpression memoryArray, IProfilingCodeGenerator profilingCodeGenerator)
+			{
+				return Expression.Call(remove, Expression.Constant(id, typeof(int)));
+			}
+
+			protected override TuringNode DeepCloneIMPL(IDictionary<TuringNode, TuringNode> keyValuePair)
+			{
+				return new MarkReachableNode(id);
+			}
+		}
+
+		private sealed class LivenessProfilingCodeInjector : IVisitor
+		{
+			private readonly Dictionary<TuringNode, bool> knownNodes = new Dictionary<TuringNode, bool>(ReferenceEqualityComparer.Instance);
+			private readonly Dictionary<int, Block> unreachedCode;
+
+			public LivenessProfilingCodeInjector(Dictionary<int, Block> unreachedCode)
+			{
+				this.unreachedCode = unreachedCode;
+			}
+
+			public TuringNode Visit(TuringNode turingNode)
+			{
+				if (knownNodes.TryAdd(turingNode, false))
+				{
+					if (turingNode is Block block)
+					{
+						int id = knownNodes.Count;
+						block.turingNodes.Add(new ProfilingCode(new MarkReachableNode(id)));
+						unreachedCode.Add(id, block);
+					}
+					turingNode.VisitChildren(this);
+				}
+				return turingNode;
+			}
+		}
+		private sealed class UnreachedLoopsStripper : IVisitor
+		{
+			private readonly ThreadPrivateProfiler parent;
+
+			public UnreachedLoopsStripper(ThreadPrivateProfiler parent, Dictionary<int, Block> unreachedCode)
+			{
+				this.parent = parent;
+				this.unreachedCode = unreachedCode;
+			}
+			private Dictionary<TuringNode, bool> blacklist;
+			private static readonly TuringNode nop = new NoOperation();
+			private readonly Dictionary<int, Block> unreachedCode;
+			public TuringNode Visit(TuringNode turingNode)
+			{
+				bool root = blacklist is null;
+				if (root){
+					CheckBelongToThread(parent);
+					blacklist = new Dictionary<TuringNode, bool>(ReferenceEqualityComparer.Instance);
+					foreach (TuringNode turingNode1 in unreachedCode.Values)
+					{
+						blacklist.Add(turingNode1, false);
+					}
+				}
+				if (turingNode is WhileBlock whileBlock)
+				{
+					if (blacklist.ContainsKey(whileBlock.underlying))
+					{
+						if(root){
+							blacklist = null;
+						}
+						return nop;
+					}
+				}
+				turingNode.VisitChildren(this);
+				if (root)
+				{
+					blacklist = null;
+				}
+				return turingNode;
+
+			}
 		}
 	}
 }

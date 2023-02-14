@@ -63,7 +63,7 @@ namespace MarilynJIT.Tests
 				}
 				string json = JsonConvert.SerializeObject(output) + "\n";
 				double result = output[15];
-				if (double.IsNaN(result) | double.IsInfinity(result))
+				if (double.IsNaN(result) | double.IsInfinity(result) | result == 0)
 				{
 					return double.NegativeInfinity;
 				}
@@ -117,7 +117,7 @@ namespace MarilynJIT.Tests
 
 		[Test]
 		public async Task TuringMLTraining(){
-			await TuringML.Trainer.Train(new AdditionTrainingTestingEnvironment(), 16, 2, 2, 256, 16, 256, 256, 256, 4, 16, 16, new Block());
+			await TuringML.Trainer.Train(new AdditionTrainingTestingEnvironment(), 16, 2, 2, 256, ulong.MaxValue, 256, 256, 256, 4, 16, 16, new Block());
 		}
 	}
 }
