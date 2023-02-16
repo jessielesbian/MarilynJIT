@@ -83,7 +83,22 @@ namespace MarilynJIT.KellySSA
 		}
 		public static Action<double[], double[]> Compile(Node[] nodes, ushort outputsCount, bool checking, IProfilingCodeGenerator profilingCodeGenerator = null){
 			ushort length = (ushort)nodes.Length;
-			
+
+			Dictionary<Node, ushort> keyValuePairs = new Dictionary<Node, ushort>();
+			for (ushort i = 0; i < length; ++i)
+			{
+				Node node = nodes[i];
+				if (node is null | node is IDirectCompileNode)
+				{
+					continue;
+				}
+				if (keyValuePairs.TryGetValue(node, out ushort offset)){
+					nodes[i] = new Move(offset);
+				} else{
+					keyValuePairs.Add(node, i);
+				}
+			}
+
 			bool[] noinline = new bool[length];
 			for(ushort i = 0; i < length; ++i){
 				Node node = nodes[i];
@@ -161,8 +176,8 @@ namespace MarilynJIT.KellySSA
 				expressions[i] = compiled;
 			}
 			ParameterExpression outputArray = Expression.Parameter(typeof(double[]));
-			for (int i = length - outputsCount; i < length; ++i){
-				list.Add(Expression.Assign(Expression.ArrayAccess(outputArray, Expression.Constant(i, typeof(int))), expressions[i]));
+			for (int i = length - outputsCount, z = 0; i < length; ++i, ++z){
+				list.Add(Expression.Assign(Expression.ArrayAccess(outputArray, Expression.Constant(z, typeof(int))), expressions[i]));
 			}
 			Expression totalCompile = Expression.Block(variables, list);
 			if (profilingCodeGenerator is null){

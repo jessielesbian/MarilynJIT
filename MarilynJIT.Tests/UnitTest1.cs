@@ -24,8 +24,7 @@ namespace MarilynJIT.Tests
 			ParameterExpression[] parameterExpressions = new ParameterExpression[] { Expression.Parameter(typeof(double)) };
 			Node[] nodes = RandomProgramGenerator.GenerateInitial(1, 256);
 			JITCompiler.Optimize(nodes, 255);
-			JITCompiler.Compile(nodes, 1, false);
-			Console.WriteLine(JsonConvert.SerializeObject(nodes));
+			JITCompiler.Compile(nodes, 1, false)(new double[1], new double[1]);
 		}
 	}
 }

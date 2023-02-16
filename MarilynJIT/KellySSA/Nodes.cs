@@ -88,6 +88,24 @@ namespace MarilynJIT.KellySSA.Nodes
 			result = 0;
 			return false;
 		}
+		public override int GetHashCode(){
+			Span<int> span = stackalloc int[1];
+			Span<ushort> span1 = MemoryMarshal.Cast<int, ushort>(span);
+			span1[0] = first;
+			span1[1] = second;
+			return span[0] ^ GetType().GetHashCode();
+		}
+		public override bool Equals(object obj)
+		{
+			if(obj is null){
+				return false;
+			}
+			if(obj is BinaryOperator binaryOperator){
+				return (first == binaryOperator.first & second == binaryOperator.second) && GetType() == binaryOperator.GetType();
+			}
+			return false;
+		}
+
 	}
 	public sealed class AdditionOperator : BinaryOperator
 	{
@@ -112,22 +130,22 @@ namespace MarilynJIT.KellySSA.Nodes
 			Node secnode = nodes[second];
 			bool hasy = secnode.TryEvaluate(nodes.Slice(0, second), out double y);
 
-			if(hasx)
+			if (hasx)
 			{
 				if (hasy)
 				{
 					return new ConstantNode(x + y);
 				}
-				if (double.IsNaN(x)){
+				if (double.IsNaN(x)) {
 					return ConstantNode.nan;
 				}
-				if(x == 0){
+				if (x == 0) {
 					return secnode is IDirectCompileNode ? secnode : new Move(second);
 				}
 			}
 			if (hasy)
 			{
-				if(double.IsNaN(y)){
+				if (double.IsNaN(y)) {
 					return ConstantNode.nan;
 				}
 				if (y == 0)
@@ -506,7 +524,28 @@ namespace MarilynJIT.KellySSA.Nodes
 			}
 			return new Move(offset);
 		}
-
+		private static readonly int xor;
+		static Conditional(){
+			Span<int> span = stackalloc int[1];
+			RandomNumberGenerator.Fill(MemoryMarshal.AsBytes(span));
+			xor = span[0];
+		}
+		public override int GetHashCode()
+		{	
+			Span<uint> span = stackalloc uint[1];
+			span[0] = (uint)((x + (y * 65536L) + (z * 4294967296L)) % 4294967291);
+			return MemoryMarshal.Cast<uint, int>(span)[0] ^ xor;
+		}
+		public override bool Equals(object obj)
+		{
+			if(obj is null){
+				return false;
+			}
+			if(obj is Conditional conditional){
+				return x == conditional.x & y == conditional.y & z == conditional.z;
+			}
+			return false;
+		}
 	}
 	public sealed class Bailout : Node
 	{
@@ -544,6 +583,23 @@ namespace MarilynJIT.KellySSA.Nodes
 			}
 			result = 0;
 			return false;
+		}
+		private static readonly int xor1;
+		private static readonly int xor2;
+		static Bailout()
+		{
+			Span<int> span = stackalloc int[2];
+			RandomNumberGenerator.Fill(MemoryMarshal.AsBytes(span));
+			xor1 = span[0];
+			xor2 = span[1];
+		}
+		public override int GetHashCode()
+		{
+			Span<int> span = stackalloc int[1];
+			Span<ushort> span1 = MemoryMarshal.Cast<int, ushort>(span);
+			span1[0] = z;
+			span1[1] = mybranch;
+			return span[0] ^ (taken ? xor1 : xor2);
 		}
 	}
 
