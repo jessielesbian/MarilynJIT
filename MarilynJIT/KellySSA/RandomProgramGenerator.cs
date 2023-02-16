@@ -78,11 +78,11 @@ namespace MarilynJIT.KellySSA
 			randomizeQueue.Enqueue((ushort)target);
 			RandomizeImpl(nodes, randomizeQueue);
 		}
-		public static void StripStaticInvalidValues(Node[] nodes){
+		public static void StripStaticInvalidValues(Node[] nodes, ushort removalProtectedRegionStart){
 			int len = nodes.Length;
 			Queue<ushort> randomizeQueue = new Queue<ushort>();
 			while (true){
-				JITCompiler.Optimize(nodes);
+				JITCompiler.Optimize(nodes, removalProtectedRegionStart);
 				bool added = false;
 				for(ushort i = 1; i < len; ++i){
 					Node node = nodes[i];

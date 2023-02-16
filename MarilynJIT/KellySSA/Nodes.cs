@@ -18,7 +18,7 @@ namespace MarilynJIT.KellySSA.Nodes
 			result = 0;
 			return false;
 		}
-		public abstract Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions);
+		public abstract Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray);
 		public abstract IEnumerable<ushort> GetReads();
 		public virtual Node Optimize(ReadOnlySpan<Node> nodes){
 			if(TryEvaluate(nodes, out double result)){
@@ -41,7 +41,7 @@ namespace MarilynJIT.KellySSA.Nodes
 			this.value = value;
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			return Expression.Constant(value, typeof(double));
 		}
@@ -95,7 +95,7 @@ namespace MarilynJIT.KellySSA.Nodes
 		{
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			return Expression.Add(prevNodes[first], prevNodes[second]);
 		}
@@ -145,7 +145,7 @@ namespace MarilynJIT.KellySSA.Nodes
 		{
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			return Expression.Subtract(prevNodes[first], prevNodes[second]);
 		}
@@ -193,7 +193,7 @@ namespace MarilynJIT.KellySSA.Nodes
 		{
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			return Expression.Multiply(prevNodes[first], prevNodes[second]);
 		}
@@ -263,7 +263,7 @@ namespace MarilynJIT.KellySSA.Nodes
 		private static readonly Expression zero = Expression.Constant(0.0, typeof(double));
 
 		public Expression CompileWithChecking(ReadOnlySpan<Expression> prevNodes, ushort index){
-			return Expression.Block(Expression.IfThen(Expression.Equal(prevNodes[second], zero), Expression.Throw(Expression.New(dynamicZeroDivisionConstructor, Expression.Constant(index, typeof(ushort))))), Compile(prevNodes, Array.Empty<ParameterExpression>()));
+			return Expression.Block(Expression.IfThen(Expression.Equal(prevNodes[second], zero), Expression.Throw(Expression.New(dynamicZeroDivisionConstructor, Expression.Constant(index, typeof(ushort))))), Compile(prevNodes, null));
 		}
 		public bool IsStaticInvalidOperator(ReadOnlySpan<Node> prevNodes){
 			if (prevNodes[second].TryEvaluate(prevNodes, out double result))
@@ -279,7 +279,7 @@ namespace MarilynJIT.KellySSA.Nodes
 		{
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			return Expression.Divide(prevNodes[first], prevNodes[second]);
 		}
@@ -330,7 +330,7 @@ namespace MarilynJIT.KellySSA.Nodes
 		{
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			return Expression.Modulo(prevNodes[first], prevNodes[second]);
 		}
@@ -351,7 +351,7 @@ namespace MarilynJIT.KellySSA.Nodes
 
 		public Expression CompileWithChecking(ReadOnlySpan<Expression> prevNodes, ushort index)
 		{
-			return Expression.Block(Expression.IfThen(Expression.LessThanOrEqual(prevNodes[second], zero), Expression.Throw(Expression.New(dynamicZeroDivisionConstructor, Expression.Constant(index, typeof(ushort))))), Compile(prevNodes, Array.Empty<ParameterExpression>()));
+			return Expression.Block(Expression.IfThen(Expression.LessThanOrEqual(prevNodes[second], zero), Expression.Throw(Expression.New(dynamicZeroDivisionConstructor, Expression.Constant(index, typeof(ushort))))), Compile(prevNodes, null));
 		}
 		public bool IsStaticInvalidOperator(ReadOnlySpan<Node> prevNodes)
 		{
@@ -368,7 +368,7 @@ namespace MarilynJIT.KellySSA.Nodes
 		{
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			return Expression.Power(prevNodes[first], prevNodes[second]);
 		}
@@ -419,7 +419,7 @@ namespace MarilynJIT.KellySSA.Nodes
 		{
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			return Expression.Call(methodInfo, prevNodes[first], prevNodes[second]);
 		}
@@ -437,7 +437,7 @@ namespace MarilynJIT.KellySSA.Nodes
 			this.target = target;
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			return prevNodes[target];
 		}
@@ -461,7 +461,7 @@ namespace MarilynJIT.KellySSA.Nodes
 			this.z = z;
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			ParameterExpression variable = Expression.Variable(typeof(double));
 			return Expression.Block(new ParameterExpression[] { variable }, Expression.IfThenElse(Expression.GreaterThan(prevNodes[z], zero), Expression.Assign(variable, prevNodes[x]), Expression.Assign(variable, prevNodes[y])), variable);
@@ -523,7 +523,7 @@ namespace MarilynJIT.KellySSA.Nodes
 			this.taken = taken;
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
 			return Expression.Block(Expression.IfThen(taken ? Expression.LessThanOrEqual(prevNodes[z], zero) : Expression.GreaterThan(prevNodes[z], zero), throwBailout), prevNodes[mybranch]);
 		}
@@ -550,7 +550,7 @@ namespace MarilynJIT.KellySSA.Nodes
 	public interface IRemovalProtectedNode{
 		
 	}
-	public sealed class ArgumentNode : Node, IDirectCompileNode, IRemovalProtectedNode
+	public sealed class ArgumentNode : Node, IRemovalProtectedNode
 	{
 		private readonly ushort parameterId;
 
@@ -559,9 +559,9 @@ namespace MarilynJIT.KellySSA.Nodes
 			this.parameterId = parameterId;
 		}
 
-		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, ReadOnlySpan<ParameterExpression> parameterExpressions)
+		public override Expression Compile(ReadOnlySpan<Expression> prevNodes, Expression inputArray)
 		{
-			return parameterExpressions[parameterId];
+			return Expression.ArrayAccess(inputArray, Expression.Constant((int) parameterId, typeof(int)));
 		}
 
 		public override IEnumerable<ushort> GetReads()

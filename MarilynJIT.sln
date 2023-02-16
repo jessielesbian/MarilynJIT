@@ -5,7 +5,7 @@ VisualStudioVersion = 16.0.31729.503
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MarilynJIT", "MarilynJIT\MarilynJIT.csproj", "{A2C6A6B7-7716-470F-B6E4-290C56D12A7D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MarilynJIT.Tests", "MarilynJIT.Tests\MarilynJIT.Tests.csproj", "{B366F05A-40B9-450F-95C0-B2F80CAD125F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MarilynJIT.Tests", "MarilynJIT.Tests\MarilynJIT.Tests.csproj", "{B366F05A-40B9-450F-95C0-B2F80CAD125F}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
